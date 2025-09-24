@@ -10,3 +10,5 @@ migrations/
 *.exe
 *.log
 .env
+tree.txt
+used_translation_keys.json
