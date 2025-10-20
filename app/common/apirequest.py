@@ -18,17 +18,26 @@ class APIRequestError(Exception):
         super().__init__(f"{code}: {message}")
 
 
-async def make_request(method: str, url: str, **kwargs):
+async def make_request(method: str, url: str, get_text: bool = False, **kwargs):
     async with ClientSession() as session:
         async with session.request(method, url, **kwargs) as response:
             response.raise_for_status()
+            if get_text:
+                return await response.text()
             return await response.json()
 
 
 # TODO: 이거 message에 endpoint.errocde 이런식으로 들어가길 원함
 async def apirequest(
-    endpoint: str, method: str = "GET", error_code: str = "endpoint.unknown", **kwargs
-):
+    endpoint: str, method: str = "GET", **kwargs
+) -> list | dict | str | int | bool | None:
+    """
+    Make an API request to the specified endpoint with error handling.
+    :param endpoint:
+    :param method:
+    :param kwargs:
+    :return: Response data
+    """
     url = var.apiurl + endpoint
     header = {"X-Internal-Request": "true"}
     if "headers" in kwargs:
@@ -39,12 +48,12 @@ async def apirequest(
         body = await make_request(method, url, **kwargs)
     except ClientResponseError as e:
         raise APIRequestError(
-            code=error_code, message=f"HTTP {e.status} {e.message}", status=e.status
+            code=str(e.status), message=f"HTTP {e.status} {e.message}", status=e.status
         ) from e
 
     if not body.get("success", False):
         raise APIRequestError(
-            code=error_code,
+            code=body.get("error_code"),
             message=body.get("message", "Unknown error"),
             status=body.get("error_code"),
             data=body.get("data"),

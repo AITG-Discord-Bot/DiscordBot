@@ -22,7 +22,7 @@ from interactions import (
 from interactions.api.events import Startup, Error, CommandError, ComponentError
 
 from common import (
-    apirequest,
+    logger,
     is_dev,
     command_error_handler,
     on_error_handler,
@@ -38,47 +38,6 @@ using extensions: each command is seperated into different files
                   no need to turn off bot to add new commands
 """
 
-
-class MyLogger(logging.Logger):
-    def __init__(self, name: str):
-        super().__init__(name)
-        self.conn = None
-        self.broadcastlevel = "info"
-
-    def debug(self, msg, *args, **kwargs):
-        return super(MyLogger, self).debug(msg, *args, **kwargs)
-
-    def info(self, msg, *args, **kwargs):
-        return super(MyLogger, self).info(msg, *args, **kwargs)
-
-    def error(self, msg, *args, **kwargs):
-        return super(MyLogger, self).error(msg, *args, **kwargs)
-
-
-logging.setLoggerClass(MyLogger)
-logger = logging.getLogger("AITG")
-logger.setLevel(logging.INFO)
-
-formatter = logging.Formatter(
-    "%(asctime)s:%(levelname)s:%(message)s", "%Y-%m-%d %H:%M:%S"
-)
-
-console_handler = logging.StreamHandler()
-console_handler.setLevel(logging.INFO)
-console_handler.setFormatter(formatter)
-logger.addHandler(console_handler)
-
-debugfile = var.logpath + var.debugfile
-file_debug_handler = logging.FileHandler(debugfile, encoding="utf-8", mode="w")
-file_debug_handler.setLevel(logging.DEBUG)
-file_debug_handler.setFormatter(formatter)
-logger.addHandler(file_debug_handler)
-
-errlogfile = var.logpath + var.errorfile
-file_error_handler = logging.FileHandler(errlogfile, encoding="utf-8", mode="a")
-file_error_handler.setLevel(logging.ERROR)
-file_error_handler.setFormatter(formatter)
-logger.addHandler(file_error_handler)
 
 bot = interactions.Client(
     intents=Intents.DEFAULT | Intents.MESSAGE_CONTENT | Intents.GUILD_MEMBERS,
@@ -130,19 +89,6 @@ async def on_startup():
         bot.load_extension(temp, functions=functions)
     logger.info("Bot is ready")
     logger.error("Bot is ready")
-    # if var.server is None:
-    #     await updatekoreandiscordbot()
-    #     updatekoreandiscordbot.start()
-
-    # check guild availability
-    # await apirequest("/serverinfo/setavailability", params={"availability": 0})
-    # for guild in bot.guilds:
-    #     await apirequest("/serverinfo/add", params={"serverid": guild.id})
-    # result = await apirequest("/serverinfo/deleteunavailable")
-    # if result["data"] != 0:
-    #     logger.info(f"Deleted {len(result['data'])} unavailable servers")
-    #     for temp in result["data"]:
-    #         logger.info(f"Deleted serverid: {temp}")
 
 
 @slash_command(name="hello", description="Hello", scopes=[var.dev_server])
@@ -150,24 +96,14 @@ async def my_command_function(ctx: SlashContext):
     await ctx.send("안녕", ephemeral=True)
 
 
-# @check(is_dev)
-# @slash_command(
-#     name="reload_ext", description="reload extension", scopes=[var.dev_server]
-# )
-# @extension()
-# async def myreload(ctx: SlashContext, extension: str):
-#     await myreload2(extension)
-#     await ctx.send("Done", ephemeral=True)
-#
-#
-# async def myreload2(extension):
-#     if extension == "all":
-#         for temp in Extensions:
-#             if temp == "all":
-#                 continue
-#             bot.reload_extension(temp)
-#     else:
-#         bot.reload_extension(extension)
+@check(is_dev)
+@slash_command(
+    name="reload_ext", description="reload extension", scopes=[var.dev_server]
+)
+@extension()
+async def myreload(ctx: SlashContext, extension: str):
+    await unloadext(ctx, extension=extension, send=False)
+    await loadext(ctx, extension=extension)
 
 
 @check(is_dev)
@@ -189,7 +125,7 @@ async def loadext(ctx: SlashContext, extension: str):
     name="unload_ext", description="unload extension", scopes=[var.dev_server]
 )
 @extension()
-async def unloadext(ctx: SlashContext, extension: str):
+async def unloadext(ctx: SlashContext, extension: str, send=True):
     if extension == "all":
         for temp in Extensions:
             if temp == "all":
@@ -197,7 +133,8 @@ async def unloadext(ctx: SlashContext, extension: str):
             bot.unload_extension(temp)
     else:
         bot.unload_extension(extension)
-    await ctx.send("Done", ephemeral=True)
+    if send:
+        await ctx.send("Done", ephemeral=True)
 
 
 @check(is_dev)
@@ -277,11 +214,3 @@ if __name__ == "__main__":
     import uvicorn
 
     uvicorn.run(app, host="0.0.0.0", port=var.app_port)
-
-    # update_extensions()
-    # print(Extensions)
-
-    # if var.server is not None:
-    #     bot.debug_scope = var.server
-    #     logger.info(f"debug at server: {bot.debug_scope}")
-    # bot.start(var.token)

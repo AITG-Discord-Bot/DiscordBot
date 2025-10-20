@@ -1,1 +1,1 @@
-from .clanwar import Clanwar, setup, teardown
+from .setup import Clanwar, setup, teardown

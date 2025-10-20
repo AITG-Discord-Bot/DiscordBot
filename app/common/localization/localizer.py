@@ -8,7 +8,13 @@ from interactions.api.events import Component
 
 from common.var import localization_path
 
-from interactions import SlashContext, ComponentContext, LocalisedName, LocalisedDesc
+from interactions import (
+    SlashContext,
+    ComponentContext,
+    LocalisedName,
+    LocalisedDesc,
+    ContextMenuContext,
+)
 
 locales = {}
 default_locale = "en-US"  # 기본 로케일
@@ -95,7 +101,10 @@ def localize(server_only: bool = True):
     def decorator(func):
         @wraps(func)
         async def wrapped_func(
-            self, ctx: Union[SlashContext, ComponentContext, Component], *args, **kwargs
+            self,
+            ctx: Union[SlashContext, ComponentContext, Component, ContextMenuContext],
+            *args,
+            **kwargs,
         ):
             if isinstance(ctx, Component):
                 ctx = ctx.ctx

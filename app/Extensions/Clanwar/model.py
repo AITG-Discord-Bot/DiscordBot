@@ -24,36 +24,50 @@ from datetime import datetime
 import time
 from json import loads
 
-from common import apirequest
+from common import apirequest, APIRequestError
+
+"""
+clanwar party management
+이 파일은 진짜 예전에 짜서 코드가 더럽습니다 죄송합니다;;;
+수정을 해야하지만 동작하니까 절대 건들지마!!
+"""
 
 
 def addthread(_):
-    return StringSelectOption(label=_("clanwar.add_thread"), value="add_thread")
+    return StringSelectOption(label=_("clanwar_add_thread"), value="add_thread")
 
 
 def delthread(_):
-    return StringSelectOption(label=_("clanwar.del_thread"), value="delete_thread")
+    return StringSelectOption(label=_("clanwar_del_thread"), value="delete_thread")
 
 
 def setvoicechannel(_):
     return StringSelectOption(
-        label=_("clanwar.set_voicechannel"), value="edit_voicechannel"
+        label=_("clanwar_set_voicechannel"), value="edit_voicechannel"
     )
 
 
 def startparty(_):
-    return StringSelectOption(label=_("clanwar.start"), value="start")
+    return StringSelectOption(label=_("clanwar_start"), value="start")
 
 
 def changeowner(_):
-    return StringSelectOption(label=_("clanwar.change_owner"), value="change_owner")
+    return StringSelectOption(label=_("clanwar_change_owner"), value="change_owner")
 
 
 def partyowneractions(_):
     return [
-        StringSelectOption(label=_("clanwar.end"), value="end"),
-        StringSelectOption(label=_("clanwar.delete"), value="delete"),
+        StringSelectOption(label=_("clanwar_end"), value="end"),
+        StringSelectOption(label=_("clanwar_delete"), value="delete"),
     ]
+
+
+def cancelpartybutton(_, partyid: str):
+    return Button(
+        label=_("clanwar_cancel"),
+        custom_id=f"{partyid}_cancel_party",
+        style=ButtonStyle.DANGER,
+    )
 
 
 class ClanwarBase:
@@ -95,9 +109,9 @@ class ClanwarBase:
         self.time = None
         self.threadid: int = None
         self.thread = None
-        self.participant = []
-        self.primarywaiter = []
-        self.waiter = []
+        self.participant: list = []
+        self.primarywaiter: list = []
+        self.waiter: list = []
         self.voicechannelid: int = None
         self.voicechannel = None
 
@@ -197,7 +211,7 @@ class ClanwarBase:
         if self.thread is not None:
             return False
         thread = await self.channel.create_thread_from_message(
-            name=self._("clanwar.party_author").format(self.owner.display_name),
+            name=self._("clanwar_party_author").format(self.owner.display_name),
             message=self.message,
             auto_archive_duration=10080,
         )
@@ -224,8 +238,8 @@ class ClanwarBase:
     async def log_action(self, user: Member, action):
         if self.thread is not None:
             await self.thread.send(
-                self._("clanwar.logmessage").format(
-                    user.mention, self._(f"clanwar.partyaction.{action}")
+                self._("clanwar_logmessage").format(
+                    user.mention, self._(f"clanwar_partyaction_{action}")
                 )
             )
 
@@ -283,7 +297,7 @@ class ClanwarBase:
             StringSelectMenu(
                 *select,
                 custom_id="manage_party",
-                placeholder=self._("clanwar.only_owner_area"),
+                placeholder=self._("clanwar_only_owner_area"),
                 min_values=1,
                 max_values=1,
                 disabled=disable_select,
@@ -291,19 +305,19 @@ class ClanwarBase:
         )
         row2 = ActionRow(
             Button(
-                label=self._("clanwar.join"),
+                label=self._("clanwar_join"),
                 custom_id="join_party",
                 style=ButtonStyle.GREEN,
                 disabled=disable_button,
             ),
             Button(
-                label=self._("clanwar.wait"),
+                label=self._("clanwar_wait"),
                 custom_id="wait_party",
                 style=ButtonStyle.BLUE,
                 disabled=disable_button,
             ),
             Button(
-                label=self._("clanwar.exit"),
+                label=self._("clanwar_exit"),
                 custom_id="exit_party",
                 style=ButtonStyle.RED,
                 disabled=disable_button,
@@ -311,13 +325,15 @@ class ClanwarBase:
         )
         return [row1, row2]
 
-    async def create_embed(self, started=False, ended=False, auto_end=False):
-        self.name = self._("clanwar.party_name").format(self.game)
+    async def create_embed(
+        self, started=False, ended=False, auto_end=False, cancelled=False
+    ):
+        self.name = self._("clanwar_party_name").format(self.game)
         embed = Embed(
             title=self.name, description=self.desc, color=randint(0, 0xFFFFFF)
         )
         embed.set_author(
-            name=self._("clanwar.party_author").format(self.owner.display_name),
+            name=self._("clanwar_party_author").format(self.owner.display_name),
             icon_url=self.owner.avatar_url,
         )
         # print(self.participant)
@@ -326,8 +342,8 @@ class ClanwarBase:
             partytime = int(time.mktime(partytime.timetuple()))
             partytime = f"<t:{partytime}:R>"
             embed.add_field(
-                name=self._("clanwar.started"),
-                value=self._("clanwar.started_time").format(partytime),
+                name=self._("clanwar_started"),
+                value=self._("clanwar_started_time").format(partytime),
                 inline=False,
             )
         elif ended:
@@ -336,21 +352,30 @@ class ClanwarBase:
             partytime = f"<t:{partytime}:F>"
             auto = ""
             if auto_end:
-                auto = self._("clanwar.auto_end")
+                auto = self._("clanwar_auto_end")
             embed.add_field(
-                name=self._("clanwar.ended"),
-                value=self._("clanwar.ended_time").format(partytime, auto),
+                name=self._("clanwar_ended"),
+                value=self._("clanwar_ended_time").format(partytime, auto),
+                inline=False,
+            )
+        elif cancelled:
+            partytime = datetime.now()
+            partytime = int(time.mktime(partytime.timetuple()))
+            partytime = f"<t:{partytime}:F>"
+            embed.add_field(
+                name=self._("clanwar_canceled"),
+                value=self._("clanwar_canceled_time").format(partytime),
                 inline=False,
             )
         else:
             embed.add_field(
-                name=self._("common.time"), value=maketimestr(self.time), inline=True
+                name=self._("common_time"), value=maketimestr(self.time), inline=True
             )
         participant_str = f"> <@{self.owner.id}> "
         for user in self.participant:
             participant_str += f"<@{user}> "
         embed.add_field(
-            name=self._("clanwar.participant_count").format(len(self.participant) + 1),
+            name=self._("clanwar_participant_count").format(len(self.participant) + 1),
             value=participant_str,
             inline=False,
         )
@@ -359,14 +384,14 @@ class ClanwarBase:
             for user in self.primarywaiter:
                 primarywaiter_str += f"<@{user}> "
             embed.add_field(
-                name=self._("clanwar.primary_waiters"),
+                name=self._("clanwar_primary_waiters"),
                 value=primarywaiter_str,
                 inline=False,
             )
         else:
             embed.add_field(
-                name=self._("clanwar.primary_waiters"),
-                value="> " + self._("clanwar.no_primary_waiters"),
+                name=self._("clanwar_primary_waiters"),
+                value="> " + self._("clanwar_no_primary_waiters"),
                 inline=False,
             )
         if len(self.waiter) > 0:
@@ -374,17 +399,17 @@ class ClanwarBase:
             for user in self.waiter:
                 waiter_str += f"<@{user}> "
             embed.add_field(
-                name=self._("clanwar.waiters"), value=waiter_str, inline=False
+                name=self._("clanwar_waiters"), value=waiter_str, inline=False
             )
         else:
             embed.add_field(
-                name=self._("clanwar.waiters"),
-                value="> " + self._("clanwar.no_waiters"),
+                name=self._("clanwar_waiters"),
+                value="> " + self._("clanwar_no_waiters"),
                 inline=False,
             )
-        footer = self._("clanwar.party_id").format(self.partyid)
+        footer = self._("clanwar_party_id").format(self.partyid)
         if self.voicechannel is None:
-            footer += "\n" + self._("clanwar.no_voicechannel")
+            footer += "\n" + self._("clanwar_no_voicechannel")
         else:
             embed.url = (
                 f"https://discord.com/channels/{self.server.id}/{self.voicechannel.id}"
@@ -497,29 +522,37 @@ class ClanwarBase:
             return threadmembers
         return []
 
-    async def notify(self):
+    async def notify(self, cancelled=False):
         for person in self.participant + self.primarywaiter + self.waiter:
             try:
-                user = await self.server.fetch_member(person[0])
+                user = await self.server.fetch_member(person)
                 dmchannel = await user.fetch_dm()
+                msg = "clanwar_notification_message"
+                if cancelled:
+                    msg = "clanwar_notification_canceled_message"
                 await dmchannel.send(
-                    self._("clanwar.notification_message").format(
+                    self._(msg).format(
                         self.server.name, self.owner.display_name, self.message.jump_url
                     )
                 )
             except Exception:
                 pass
         # send party owner too
+        if cancelled:
+            return
         ownerdmchannel = await self.owner.fetch_dm()
         await ownerdmchannel.send(
-            self._("clanwar.owner_notification_message").format(
+            self._("clanwar_owner_notification_message").format(
                 self.server.name, self.message.jump_url
             )
         )
         await self.set_notified()
 
-    async def set_notified(self):
-        await apirequest(f"/clanwar/{self.partyid}/notified", method="POST")
+    async def set_notified(self, cancelled=False):
+        url = "/clanwar/{}/notified"
+        if cancelled:
+            url = "/clanwar/{}/cancel_notified"
+        await apirequest(url.format(self.partyid), method="POST")
         return
 
     async def start_party(self):
@@ -529,9 +562,35 @@ class ClanwarBase:
         await self.log_action(self.owner, PARTYACTIONS.START_PARTY)
         return
 
+    async def send_cancel_notification(self):
+        ownerdmchannel = await self.owner.fetch_dm()
+        button = cancelpartybutton(self._, self.partyid)
+        await ownerdmchannel.send(
+            self._("clanwar_owner_cancel_notification_message").format(
+                self.server.name, self.message.jump_url
+            ),
+            components=button,
+        )
+        await self.set_notified(cancelled=True)
+
+    async def cancel_party(self):
+        if self.message is None:
+            self.bot.logger.info(f"{self.partyid} has a None Message")
+            await self.delete(del_message=False)
+            return
+        components = await self.create_components(
+            started=True, disable_select=True, disable_button=True
+        )
+        embed = await self.create_embed(cancelled=True)
+        await self.message.edit(embed=embed, components=components)
+        await self.log_action(self.owner, PARTYACTIONS.CANCEL_PARTY)
+        await self.notify(cancelled=True)
+        await self.delete(del_message=False)
+
     async def end_party(self, auto=False):
         if self.message is None:
             self.bot.logger.info(f"{self.partyid} has a None Message")
+            await self.delete(del_message=False)
             return
         components = await self.create_components(
             started=True, disable_select=True, disable_button=True
@@ -542,13 +601,20 @@ class ClanwarBase:
         await self.delete(del_message=False)
 
     async def delete(self, del_message=True):
-        """Delete party from db as well as party's message and threadchannel"""
-        await apirequest(f"/clanwar/{self.partyid}", method="DELETE")
+        """
+        Delete party from db as well as party's message and threadchannel
+        :param del_message: if True, delete message and threadchannel
+        """
+        try:
+            await apirequest(f"/clanwar/{self.partyid}", method="DELETE")
+        except APIRequestError as e:
+            if e.status != 404:
+                raise e
         if self.thread is not None:
             if del_message:
                 await self.thread.delete()
             else:
-                await self.thread.archive(locked=True, reason=self._("clanwar.ended"))
+                await self.thread.archive(locked=True, reason=self._("clanwar_ended"))
         if del_message:
             try:
                 await self.message.delete()
@@ -566,6 +632,7 @@ class PARTYACTIONS:
     EDIT_VOICECHANNEL = 12
     START_PARTY = 20
     END_PARTY = 21
+    CANCEL_PARTY = 22
 
 
 def maketimestr(timestr):
