@@ -28,7 +28,24 @@ def textchannel(name="options_textchannel", desc="options_textchannel", required
                 ChannelType.GUILD_TEXT,
                 ChannelType.GUILD_NEWS,
                 ChannelType.GUILD_FORUM,
+                ChannelType.GUILD_NEWS_THREAD,
+                ChannelType.GUILD_PUBLIC_THREAD,
+                ChannelType.GUILD_PRIVATE_THREAD,
+                # 사실상 그냥 메시지 보낼 수 있는 채널들
             ],
+        )(func)
+
+    return wrapper
+
+
+def category(name="options_category", desc="options_category", required=True):
+    def wrapper(func):
+        return slash_option(
+            name=getname(name),
+            description=getdesc(desc),
+            opt_type=OptionType.CHANNEL,
+            required=required,
+            channel_types=[ChannelType.GUILD_CATEGORY],
         )(func)
 
     return wrapper

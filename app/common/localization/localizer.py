@@ -90,14 +90,21 @@ language_utc_offsets = {
     "vi": 7,  # Vietnam
 }
 
-
-for file in listdir(localization_path):
-    if file.endswith(".json") and isfile(join(localization_path, file)):
-        with open(join(localization_path, file), "r", encoding="utf-8") as f:
-            locales[file[:-5]] = json.load(f)
+news_language_codes = ["en", "de", "fr", "ru", "es", "pt", "pl", "ko", "cs", "zh"]
 
 
-def localize(server_only: bool = True):
+def load_localization():
+    global locales
+    for file in listdir(localization_path):
+        if file.endswith(".json") and isfile(join(localization_path, file)):
+            with open(join(localization_path, file), "r", encoding="utf-8") as f:
+                locales[file[:-5]] = json.load(f)
+
+
+load_localization()
+
+
+def localize(_func=None, *, server_only: bool = True):
     def decorator(func):
         @wraps(func)
         async def wrapped_func(
@@ -108,18 +115,20 @@ def localize(server_only: bool = True):
         ):
             if isinstance(ctx, Component):
                 ctx = ctx.ctx
-            if server_only and not ctx.guild:
+            if isinstance(ctx, SlashContext) and server_only and not ctx.guild:
                 _ = localizator(ctx.locale)
                 await ctx.send(_("server_only_error"), ephemeral=True)
                 return None
-
             locale = ctx.locale
             if locale not in locales:
                 locale = ctx.guild.preferred_locale if ctx.guild else default_locale
-            return await func(self, ctx, localizator(locale), *args, **kwargs)
+            _ = localizator(locale)
+            return await func(self, ctx, _, *args, **kwargs)
 
         return wrapped_func
 
+    if _func is not None and callable(_func):
+        return decorator(_func)
     return decorator
 
 

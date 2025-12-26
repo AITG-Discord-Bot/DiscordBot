@@ -1,0 +1,1 @@
+from .member_remove_handler import on_member_remove

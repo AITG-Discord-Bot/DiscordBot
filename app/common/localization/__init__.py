@@ -5,4 +5,5 @@ from .localizer import (
     localizator,
     language_utc_offsets,
     default_locale,
+    load_localization,
 )

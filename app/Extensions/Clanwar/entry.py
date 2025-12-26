@@ -1,3 +1,5 @@
+import logging
+
 import interactions.api.events as Events
 
 from common import MyFunctions, apirequest, RateLimiter
@@ -8,7 +10,13 @@ from common.localization import (
 )
 from .core import *
 from .functions import notify_clanwar, finish_clanwar, cancel_clanwar
-from .handler import on_button, on_string_select, on_channel_select, on_user_select
+from .handler import (
+    on_button,
+    on_string_select,
+    on_channel_select,
+    on_user_select,
+    on_member_remove,
+)
 
 notify_clanwar_url = "clanwar_notify"
 finish_clanwar_url = "clanwar_finish"
@@ -30,7 +38,7 @@ class Clanwar(Extension):
         return await add_clanwar_(ctx, _)
 
     @listen(Events.Component)
-    @localize(server_only=False)
+    @localize()
     async def on_component(self, ctx: ComponentContext, _):
         if ctx.component_type == ComponentType.BUTTON:
             return await on_button(self.ratelimiter, ctx, _)
@@ -43,19 +51,8 @@ class Clanwar(Extension):
         return None
 
     @listen(Events.MemberRemove, delay_until_ready=True)
-    async def on_guild_left(self, event: Events.MemberRemove):
-        if not self.bot.is_ready:
-            return
-        server: Guild = event.guild
-        user: Member = event.member
-        results = await apirequest(
-            f"/clanwar/server/{server.id}/people/{user.id}", method="GET"
-        )
-        for result in results:
-            clanwar = ClanwarBase(bot=self.bot)
-            await clanwar.get_party(partyid=result.get("idx"))
-            await clanwar.remove_people(user)
-            await clanwar.edit_embed(save=False)
+    async def on_member_remove_(self, event: Events.MemberRemove):
+        return await on_member_remove(event)
 
 
 functions_: MyFunctions = None
@@ -72,3 +69,7 @@ def setup(bot: Client, functions: MyFunctions):
 
 def teardown():
     functions_.remove(notify_clanwar_url)
+    functions_.remove(finish_clanwar_url)
+    functions_.remove(cancel_clanwar_url)
+    logger = logging.getLogger("AITG")
+    logger.info("Clanwar extension torn down.")

@@ -13,6 +13,7 @@ async def on_string_select(ctx: ComponentContext, _):
     author = ctx.author
     message = ctx.message
     custom_id = ctx.custom_id
+    print(custom_id)
     party = ClanwarBase(_, ctx=ctx)
     await party.get_party(message=message)
     if author.id != party.owner.id and author.id not in var.devs:
@@ -68,7 +69,7 @@ async def on_string_select(ctx: ComponentContext, _):
                 await ctx.send(_("clanwar_started"), ephemeral=True, delete_after=5)
                 return
 
-            case "changeowner":
+            case "change_owner":
                 select = UserSelectMenu(
                     custom_id=f"party_changeowner_{party.partyid}",
                     placeholder=_("clanwar_select_owner"),

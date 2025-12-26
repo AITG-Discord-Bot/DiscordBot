@@ -1,4 +1,4 @@
-from typing import Callable, Coroutine, Any
+from typing import Callable, Coroutine, Any, Optional, Union
 import inspect
 
 from interactions import Client
@@ -38,7 +38,7 @@ class MyFunctions:
         """
         return getattr(self, name)
 
-    async def run(self, name: str, bot: Client, params: dict):
+    async def run(self, name: str, bot: Client, params: Optional[Union[dict, list]]):
         """
         Run the function by name
         :param name: name of the function
