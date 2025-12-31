@@ -1,6 +1,5 @@
 import asyncio
 import importlib
-import logging
 import sys
 from contextlib import asynccontextmanager
 from pathlib import Path
@@ -10,16 +9,14 @@ from fastapi import FastAPI, Request, Body
 from fastapi.responses import JSONResponse
 from interactions import *
 from interactions.api.events import Startup, Error, CommandError, ComponentError
-from common import (
-    is_dev,
+from common.guards import is_dev
+from error_handler import (
     command_error_handler,
     on_error_handler,
     component_error_handler,
-    MyFunctions,
 )
-from common import var
+from common.core import MyFunctions, var, set_logger
 from common.localization import load_localization
-from common.logger import set_logger
 
 """
 mainframe of bot
@@ -257,5 +254,4 @@ async def discordbot(
 
 if __name__ == "__main__":
     import uvicorn
-
     uvicorn.run(app, host="0.0.0.0", port=var.app_port)

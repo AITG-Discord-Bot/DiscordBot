@@ -8,9 +8,10 @@ from interactions.api.events import (
     MessageDelete,
 )
 
-from common import MyFunctions, is_admin
+from common.core import MyFunctions
+from common.guards import is_admin
 from common.localization import getname, getdesc, localize
-from common.options import category, textchannel
+from common.discordbot.components.options import category, textchannel
 from . import core
 from .handler import (
     on_message_create,

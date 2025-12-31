@@ -6,7 +6,7 @@ from typing import Union, Callable
 
 from interactions.api.events import Component
 
-from common.var import localization_path
+from common.core.var import localization_path
 
 from interactions import (
     SlashContext,

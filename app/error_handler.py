@@ -8,9 +8,8 @@ from interactions.client.errors import (
     MaxConcurrencyReached,
 )
 
-from common import APIRequestError, apirequest
-from .localization import localizator, default_locale
-from .options import ephemeral
+from API import APIRequestError
+from common.localization import localizator, default_locale
 
 
 async def on_error_handler(error: Error, logger):
@@ -50,12 +49,13 @@ async def command_error_handler(event: CommandError, logger):
             _(error.data if error.data else "error_apirequest"), ephemeral=True
         )
     else:
-        logger.error("Unhandled command error", exc_info=error)
+        tb_str = "".join(traceback.format_exception(type(error), error, error.__traceback__))
+        logger.error(f"Unhandled command error:\n{tb_str}")
+
         try:
             await ctx.send(_("error_generic"), ephemeral=True)
         except Exception:
             pass
-
 
 async def component_error_handler(event: ComponentError, logger):
     ctx = event.ctx

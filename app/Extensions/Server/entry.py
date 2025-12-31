@@ -1,8 +1,9 @@
 import asyncio
 
 from interactions import *
-from common import MyFunctions, options
-from common.checks import is_admin
+from common.core import MyFunctions
+from common.discordbot.components import options
+from common.guards.checks import is_admin
 from common.localization import getname, getdesc, localize
 from common.localization.localizer import news_language_codes
 from . import core
@@ -10,7 +11,7 @@ from .utils import server_func
 from .handler import on_member_add
 from interactions.api.events import GuildJoin, GuildLeft, MemberAdd
 
-serverbase = core.SlashCommand(name=getname("server_command_base"))
+serverbase = SlashCommand(name=getname("server_command_base"))
 serversettingbase = serverbase.group(name=getname("common_settings"))
 
 

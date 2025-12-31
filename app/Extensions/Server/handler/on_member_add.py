@@ -1,7 +1,7 @@
 from interactions.api.events import MemberAdd
 from interactions import *
 from ..model import ServerBase
-from common import safe_send
+from common.discordbot import safe_send
 
 
 async def handle(event: MemberAdd):

@@ -1,6 +1,6 @@
 from interactions import ComponentContext
 from Extensions.Clanwar.model import ClanwarBase, PARTYACTIONS
-from common import RateLimiter
+from common.guards import RateLimiter
 
 
 async def on_button(ratelimiter: RateLimiter, ctx: ComponentContext, _):

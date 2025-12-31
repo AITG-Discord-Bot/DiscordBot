@@ -3,7 +3,9 @@ import importlib
 from interactions import *
 import interactions.api.events as Events
 from common.localization import localize, getname, getdesc
-from common import is_admin, options, MyFunctions
+from common.guards import is_admin
+from common.core import MyFunctions
+from common.discordbot.components import options
 
 from . import core, functions as func
 from .options import use_personalrating

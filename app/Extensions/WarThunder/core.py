@@ -3,24 +3,23 @@ from random import randint
 from interactions import *
 from interactions.ext.paginators import Paginator
 
-from common import apirequest, APIRequestError, safe_send
+from API import APIRequestError
+from common.discordbot import safe_send
 from common.localization import (
     language_utc_offsets,
     default_locale,
 )
 from . import utils
 from Extensions.Server.model import ServerBase
-
+from API.features.warthunder import warthunderAPI, request
 
 async def check_clanmate_core(ctx: SlashContext, _):
     await ctx.defer(ephemeral=True)
     server = await utils.check_prerequisites(ctx, int(ctx.guild_id), _)
     if not server:
         return
-    web_members: list[dict] = await apirequest(
-        "/warthunder/clan/members", params={"clanname": server.clanname}
-    )
-    web_names = [m["nick"] for m in web_members]
+    web_members = await warthunderAPI.clan.get_members(server.clanname)
+    web_names = [m.nick for m in web_members]
     discord_members = utils.get_discord_clanmates(ctx.guild, server.clanmaterole)
 
     matched: list[Member] = []
@@ -64,11 +63,9 @@ async def check_activity_core(
     locale = ctx.locale or "en"
     page_size = 30
 
-    web_members: list[dict] = await apirequest(
-        "/warthunder/clan/members", params={"clanname": server.clanname}
-    )
-    web_members = sorted(web_members, key=lambda x: -int(x["activity"]))
-    filtered = [m for m in web_members if int(m["activity"]) <= threshold]
+    web_members = await warthunderAPI.clan.get_members(server.clanname)
+    web_members = sorted(web_members, key=lambda x: -int(x.activity))
+    filtered = [m for m in web_members if int(m.activity) <= threshold]
 
     if not filtered:
         embed = Embed(
@@ -139,9 +136,7 @@ async def add_vacation_core(ctx: SlashContext, _, options_member: Member | None)
     target = options_member if options_member else ctx.author
     nick = utils.process_nick(target.display_name)
     try:
-        member = await apirequest(
-            f"/warthunder/clan/{server.clanname}/member/{nick}", method="GET"
-        )
+        member = await warthunderAPI.clan.get_member(server.clanname, nick)
     except APIRequestError as e:
         if e.status == 404:
             await ctx.send(
@@ -200,16 +195,12 @@ async def add_vacation_core(ctx: SlashContext, _, options_member: Member | None)
     enddate = enddate.replace(hour=23, minute=59, second=59)
     enddate = enddate + utils.timedelta(hours=-utils.language_utc_offsets[locale])
 
-    payload = {
-        "memberidx": member["idx"],
-        "reason": reason,
-        "enddate": enddate.strftime("%Y-%m-%dT%H:%M:%S"),
-    }
-    await apirequest("/warthunder/clan/vacation", method="POST", json=payload)
+    dto = request.clan.ThunderClanVacationDTO(memberidx=member.idx, reason=reason, enddate=enddate)
+    await warthunderAPI.clan.add_vacation(dto)
     await modal_ctx.send(_("wt_add_vacation_success"), ephemeral=True)
 
     if server.botmessagechannel:
-        local_end = utils.to_local(payload["enddate"], locale)
+        local_end = utils.to_local(enddate.isoformat(), locale)
         await server.botmessagechannel.send(
             _("wt_add_vacation_announcement").format(nick, local_end, reason)
         )
@@ -220,26 +211,25 @@ async def view_vacation_core(ctx: SlashContext, _, ephemeral: bool):
     if not server:
         return
 
-    vacations: list[dict] = await apirequest(
-        f"/warthunder/clan/{server.clanname}/vacation", method="GET"
-    )
+    vacations = await warthunderAPI.clan.get_vacation(server.clanname)
     members = utils.get_discord_clanmates(ctx.guild, server.clanmaterole)
 
+    display_names = {}
     for v in vacations:
-        nick = v["member"]["nick"]
-        v["member"]["discord"] = "X"
+        nick = v.member.nick
+        display_names[nick] = "X"
         for m in members:
             if utils.process_nick(m.display_name) == nick:
-                v["member"]["discord"] = m.mention
+                display_names[nick] = m.mention
                 break
 
-    vacations = sorted(vacations, key=lambda x: (x["enddate"], x["member"]["nick"]))
+    vacations = sorted(vacations, key=lambda x: (x.enddate, x.member.nick))
     if not vacations:
         await ctx.send(_("wt_view_vacation_no_vacations"), ephemeral=ephemeral)
         return
 
     msg = "\n".join(
-        f"{v['member']['discord']} `{v['member']['nick']}` - {utils.to_local(v['enddate'], ctx.locale or 'en')} - {v['reason']}"
+        f"{display_names[v.member.nick]} `{v.member.nick}` - {utils.to_local(v.enddate.isoformat(), ctx.locale or 'en')} - {v.reason}"
         for v in vacations
     )
     embed = Embed(
@@ -257,14 +247,9 @@ async def remove_vacation_core(ctx: SlashContext, _, options_member: Member | No
 
     target = options_member if options_member else ctx.author
     nick = utils.process_nick(target.display_name)
-    res = await apirequest(
-        f"/warthunder/clan/{server.clanname}/vacation/{nick}", method="DELETE"
-    )
-    if res:
-        await ctx.send(
-            _("wt_remove_vacation_success").format(nick=nick), ephemeral=True
-        )
-    else:
+    try:
+        await warthunderAPI.clan.delete_vacation(server.clanname, nick)
+    except APIRequestError:
         await ctx.send(
             _("wt_remove_vacation_no_vacation").format(nick=nick), ephemeral=True
         )
@@ -281,11 +266,9 @@ async def send_latest_news(ctx: SlashContext, _):
         await ctx.send(_("wt_send_latest_news_no_newschannel"), ephemeral=True)
         return
     try:
-        res = await apirequest(
-            "/warthunder/news/latest", method="GET", params={"lang": lang}
-        )
+        res = await warthunderAPI.news.get_latest(lang)
     except APIRequestError as e:
-        if int(e.code) == 404:
+        if int(e.error_code) == 404:
             await ctx.send(_("wt_send_latest_news_no_news"), ephemeral=True)
             return
         else:

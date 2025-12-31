@@ -1,8 +1,8 @@
 from interactions import listen
 from interactions.api.events import MemberRemove
 from ..utils import process_nick
-from common import apirequest
 from Extensions.Server.model import ServerBase
+from API.features.warthunder import warthunderAPI
 
 
 async def on_member_remove(event: MemberRemove):
@@ -15,20 +15,16 @@ async def on_member_remove(event: MemberRemove):
     nick = process_nick(nick)
     server = ServerBase(bot=bot, serverid=guild.id)
     await server.get()
-    vacations: list[dict] = await apirequest(
-        f"/warthunder/clan/{server.clanname}/vacation", method="GET"
-    )
+    vacations = await warthunderAPI.clan.get_vacation(server.clanname)
     nickname = None
     for vacation in vacations:
-        nickname = vacation["member"]["nick"]
+        nickname = vacation.member.nick
         if nickname == nick:
             break
     else:
         return
 
-    await apirequest(
-        f"/warthunder/clan/{server.clanname}/vacation/{nick}", method="DELETE"
-    )
+    await warthunderAPI.clan.delete_vacation(server.clanname, nickname)
 
     if server.botmessagechannel:
         _ = server.localizator

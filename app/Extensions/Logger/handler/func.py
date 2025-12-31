@@ -2,22 +2,25 @@ import logging
 
 from interactions import Client, BaseUser, GuildForumPost, BaseChannel
 
-from . import shared
-from common import var, apirequest
+from API import APIRequestError
+from API.features.logger import loggerAPI
+from API.features.support import supportAPI, request as supporeqdto
+from common.core import var
+from .. import state
 
 
 async def init(bot: Client):
-    shared.support_forum = await bot.fetch_channel(var.support_forum_id)
+    state.support_forum = await bot.fetch_channel(var.support_forum_id)
     support_server = await bot.fetch_guild(var.support_server_id)
-    shared.devmention = await support_server.fetch_role(var.support_dev_role_id)
-    if None in (shared.support_forum, shared.devmention):
+    state.devmention = await support_server.fetch_role(var.support_dev_role_id)
+    if None in (state.support_forum, state.devmention):
         nonechannel = (
             "support forum channel"
-            if shared.support_forum is None
+            if state.support_forum is None
             else "developer mention role"
         )
         raise Exception("Failed to initialize on_message_create module.", nonechannel)
-    shared.devmention = shared.devmention.mention
+    state.devmention = state.devmention.mention
     try:
         await get_logchannels(bot)
     except:
@@ -26,95 +29,80 @@ async def init(bot: Client):
 
 
 async def teardown():
-    json = []
-    for msg in shared.messagecache.values():
-        json.append(msg["json"])
-    if json:
-        await apirequest("/logger/messagelog/bulk", json=json)
+    dto = []
+    for msg in state.messagecache.values():
+        dto.append(msg.dto)
+    if dto:
+        await loggerAPI.add_message_bulk(dto)
     logger = logging.getLogger("AITG")
-    logger.info(f"Flushed {len(shared.messagecache)} message caches to database.")
+    logger.info(f"Flushed {len(state.messagecache)} message caches to database.")
 
 
 async def get_logchannels(bot: Client):
-    res: list[dict] = await apirequest("/logger/channels", method="GET")
+    res = await loggerAPI.get_all()
     for entry in res:
-        serverid = entry["serverid"]
-        categoryid = entry["logcategory"]
-        channelid = entry["logchannel"]
+        serverid = entry.serverid
+        categoryid = entry.logcategory
+        channelid = entry.logchannel
         channel = await bot.fetch_channel(channelid)
         if not channel:
-            await apirequest(
-                f"/logger/channels/{serverid}/{categoryid}", method="DELETE"
-            )
+            await loggerAPI.delete_logchannel(serverid, categoryid)
             continue
-        if serverid not in shared.logchannels.keys():
-            shared.logchannels[serverid] = {}
-        shared.logchannels[serverid][categoryid] = channel
+        if serverid not in state.logchannels.keys():
+            state.logchannels[serverid] = {}
+        state.logchannels[serverid][categoryid] = channel
 
 
 def add_logchannel(serverid: int, categoryid: int, channel: BaseChannel):
-    if serverid not in shared.logchannels.keys():
-        shared.logchannels[serverid] = {}
-    shared.logchannels[serverid][categoryid] = channel
+    if serverid not in state.logchannels.keys():
+        state.logchannels[serverid] = {}
+    state.logchannels[serverid][categoryid] = channel
 
 
 async def managecache():
-    if len(shared.messagecache) < 1500:
+    if len(state.messagecache) < 1500:
         return
-    sortedcache = sorted(shared.messagecache.items(), key=lambda x: x[1]["time"])
+    sortedcache = sorted(state.messagecache.items(), key=lambda x: x[1].time)
     old_entries = sortedcache[:500]
-    json_payload = [entry[1]["json"] for entry in old_entries]
-    if json_payload:
-        await apirequest("logger/messagelog/bulk", json=json_payload)
+    payload = [entry[1].dto for entry in old_entries]
+    if payload:
+        await loggerAPI.add_message_bulk(payload)
     for key, _ in old_entries:
-        shared.messagecache.pop(key, None)
+        state.messagecache.pop(key, None)
 
 
 async def get_forumchannel(author: BaseUser) -> GuildForumPost:
     forumthreadid = None
-    if author.id not in shared.forumthreads.keys():
-        res = await apirequest(
-            "/support/forumchannel",
-            params={"userid": author.id},
-            method="GET",
-            surpress_error=True,
-        )
-        if res.get("success", False):
-            forumthreadid = forumthreadid["data"]["channelid"]
+    if author.id not in state.forumthreads.keys():
+        try:
+            res = await supportAPI.get(userid=author.id)
+            forumthreadid = res.channelid
+        except APIRequestError:
+            pass
     else:
-        forumthreadid = shared.forumthreads[author.id]
-        forumthread = await shared.support_forum.fetch_post(forumthreadid)
+        forumthreadid = state.forumthreads[author.id]
+        forumthread = await state.support_forum.fetch_post(forumthreadid)
         if not forumthread:
-            shared.forumthreads.pop(author.id)
-            await apirequest(
-                "/support/forumchannel",
-                params={"channelid": forumthreadid},
-                method="DELETE",
-                surpress_error=True,
-            )
+            state.forumthreads.pop(author.id)
+            try:
+                await supportAPI.delete(forumthreadid)
+            except APIRequestError:
+                pass
             return await get_forumchannel(author)
     if not forumthreadid:
-        forumthread = await shared.support_forum.create_post(
+        forumthread = await state.support_forum.create_post(
             name=f"DM_{author.id}",
-            content=f"{shared.devmention} {author.display_name} : `{author.id}` 님에게서 온 DM 입니다.",
+            content=f"{state.devmention} {author.display_name} : `{author.id}` 님에게서 온 DM 입니다.",
         )
-        await apirequest(
-            "/support/forumchannel",
-            json={"userid": author.id, "channelid": forumthread.id},
-            method="POST",
-        )
-        shared.forumthreads[author.id] = int(forumthread.id)
+        dto = supporeqdto.ForumChannelReqDTO(userid=author.id, channelid=forumthread.id)
+        await supportAPI.create(dto)
+        state.forumthreads[author.id] = int(forumthread.id)
     else:
-        forumthread = await shared.support_forum.fetch_post(forumthreadid)
+        forumthread = await state.support_forum.fetch_post(forumthreadid)
         if forumthread is None:
-            await apirequest(
-                "/support/forumchannel",
-                params={"channelid": forumthreadid},
-                method="DELETE",
-                surpress_error=True,
-            )
+            await supportAPI.delete(forumthreadid)
             return await get_forumchannel(author)
-        shared.forumthreads[author.id] = forumthread.id
-    if len(shared.forumthreads) > 100:
-        shared.forumthreads.pop(list(shared.forumthreads.keys())[0])
+        state.forumthreads[author.id] = forumthread.id
+    if len(state.forumthreads) > 100:
+        state.forumthreads.pop(list(state.forumthreads.keys())[0])
     return forumthread

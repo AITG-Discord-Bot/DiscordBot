@@ -4,7 +4,7 @@ import asyncio
 import threading
 import sys
 import aiohttp
-from . import var
+from common.core import var
 
 
 class LogFlare(logging.Logger):
@@ -17,15 +17,49 @@ class LogFlare(logging.Logger):
         self.broadcastlevel: int = logging.WARNING
         self.broadcast: bool = False
 
+    def headers(self) -> dict:
+        return {
+            "Content-Type": "application/json",
+            "Project": self.project_name,
+            "ProjectKey": "Bearer " + self.project_key,
+        }
+
+    def test_connection(self) -> bool:
+        """동기 함수에서 비동기 연결 테스트 실행"""
+        try:
+            self._spawn_coro(self._test_connection())
+            return True
+        except Exception:
+            return False
+
+    async def _test_connection(self) -> bool:
+        self.info("\n\n====================\nTesting LogFlare Connection\n====================\n\n")
+        if not (self.project_name and self.project_key and self.broadcasturl):
+            self.warning("\n\n====================\nLogFlare Info InComplete\n====================\n\n")
+            return False
+        payload = {"errortype": "Test", "level": "INFO", "message": "Test connection", "test":True}
+        try:
+            async with aiohttp.ClientSession() as session:
+                async with session.post(
+                    self.broadcasturl, json=payload, headers=self.headers()
+                ) as resp:
+                    self.info(f"\n\n====================\nLogFlare connection test status: {resp.status}\n====================\n\n")
+                    return resp.status < 400
+        except Exception:
+            self.exception("\n\n====================\nLogFlare connection test failed\n====================\n\n")
+            return False
+
     def _spawn_coro(self, coro):
         try:
             loop = asyncio.get_running_loop()
         except RuntimeError:
+
             def _runner():
                 try:
                     asyncio.run(coro)
                 except Exception as e:
                     print(f"[Broadcast THREAD EXC] {e!r}")
+
             threading.Thread(target=_runner, daemon=True).start()
         else:
             loop.create_task(coro)
@@ -49,21 +83,27 @@ class LogFlare(logging.Logger):
         if not (self.project_name and self.project_key and self.broadcasturl):
             return
         payload = {"errortype": errortype, "level": level_name, "message": msg}
-        headers = {
-            "Content-Type": "application/json",
-            "Project": self.project_name,
-            "ProjectKey": "Bearer " + self.project_key,
-        }
         try:
             async with aiohttp.ClientSession() as session:
-                async with session.post(self.broadcasturl, json=payload, headers=headers) as resp:
+                async with session.post(
+                    self.broadcasturl, json=payload, headers=self.headers()
+                ) as resp:
                     if resp.status >= 400:
                         text = await resp.text()
                         print(f"[Broadcast FAIL] {resp.status} {text}")
         except Exception as e:
             print(f"[Broadcast EXC] {e!r}")
 
-    def _log(self, level, msg, args, exc_info=None, extra=None, stack_info=False, stacklevel=1):
+    def _log(
+        self,
+        level,
+        msg,
+        args,
+        exc_info=None,
+        extra=None,
+        stack_info=False,
+        stacklevel=1,
+    ):
         try:
             formatted = (msg % args) if args else str(msg)
         except Exception:
@@ -87,7 +127,15 @@ class LogFlare(logging.Logger):
             level_name = logging.getLevelName(level)
             self._spawn_coro(self.broadcast_(errortype, level_name, formatted))
 
-        super()._log(level, msg, args, exc_info=exc_info, extra=extra, stack_info=stack_info, stacklevel=stacklevel)
+        super()._log(
+            level,
+            msg,
+            args,
+            exc_info=exc_info,
+            extra=extra,
+            stack_info=stack_info,
+            stacklevel=stacklevel,
+        )
 
     def warning(self, msg, *args, **kwargs):
         return self._log(logging.WARNING, msg, args, **kwargs)
@@ -99,7 +147,9 @@ class LogFlare(logging.Logger):
         return self._log(logging.ERROR, msg, args, exc_info=exc_info, **kwargs)
 
 
-def set_logger(name="AITG", *, broadcast_delay: float = 0.0, broadcast_initial: bool = False) -> LogFlare:
+def set_logger(
+    name="AITG", *, broadcast_delay: float = 0.0, broadcast_initial: bool = False
+) -> LogFlare:
     """
     Set up and return a logger instance
 
@@ -117,7 +167,9 @@ def set_logger(name="AITG", *, broadcast_delay: float = 0.0, broadcast_initial: 
     logger.handlers.clear()
     logger.propagate = False
 
-    formatter = logging.Formatter("%(asctime)s | %(levelname)s | %(message)s", "%Y-%m-%d %H:%M:%S")
+    formatter = logging.Formatter(
+        "%(asctime)s | %(levelname)s | %(message)s", "%Y-%m-%d %H:%M:%S"
+    )
 
     console_handler = logging.StreamHandler()
     console_handler.setLevel(logging.INFO)
@@ -138,6 +190,7 @@ def set_logger(name="AITG", *, broadcast_delay: float = 0.0, broadcast_initial: 
     logger.broadcasturl = os.getenv("LOGFLARE_URL", "")
     logger.project_name = os.getenv("DISCORD_LOGFLARE_NAME", "")
     logger.project_key = os.getenv("DISCORD_LOGFLARE_KEY", "")
+    logger.test_connection()
 
     logger.broadcast = broadcast_initial
     if broadcast_delay > 0:

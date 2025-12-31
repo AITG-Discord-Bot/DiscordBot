@@ -1,7 +1,7 @@
 from datetime import datetime, timedelta
 
 
-def convert_time(timestr, timeoffset):
+def convert_time(timestr, timeoffset) -> datetime:
     """Convert time to UTC"""
     try:
         for timeformat in [
@@ -17,4 +17,4 @@ def convert_time(timestr, timeoffset):
             break
     except ValueError:
         return None
-    return partytime.strftime("%Y-%m-%d %H:%M")
+    return partytime

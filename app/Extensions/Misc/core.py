@@ -3,7 +3,7 @@ from random import randint
 from interactions import *
 
 from Extensions.Server.model import ServerBase
-from common import waitforcomponent, safe_send
+from common.discordbot import safe_send, waitforcomponent
 
 
 async def send_to_channel(ctx: ContextMenuContext, _):
@@ -65,7 +65,7 @@ async def set_ticket(ctx: ContextMenuContext, _):
         components=[component],
     )
     await modal_ctx.send(_("app_set_ticket_success"), ephemeral=True, delete_after=10)
-    await ctx.send(_("app_set_ticket_success"), ephemeral=True, delete_after=10)
+    # await ctx.send(_("app_set_ticket_success"), ephemeral=True, delete_after=10)
 
 
 async def set_reaction_role(ctx: ContextMenuContext, _):

@@ -6,7 +6,7 @@ from interactions import (
     ComponentContext,
 )
 from Extensions.Clanwar.model import ClanwarBase
-from common import var
+from common.core import var
 
 
 async def on_string_select(ctx: ComponentContext, _):

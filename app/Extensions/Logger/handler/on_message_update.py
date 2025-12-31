@@ -2,8 +2,10 @@ from datetime import datetime, UTC
 
 from interactions import ChannelType
 from interactions.api.events import MessageUpdate
-from . import shared
-from common import apirequest
+
+from API import APIRequestError
+from .. import state
+from API.features.logger import loggerAPI, request as reqdto
 
 
 async def handle(event: MessageUpdate):
@@ -18,18 +20,26 @@ async def handle(event: MessageUpdate):
         return
     if before.content == after.content:
         return
-    if before.id not in shared.messagecache.keys():
-        data: dict = await apirequest(
-            f"/logger/messagelog/{before.id}", method="GET", surpress_error=True
-        )
-        if not data.get("success", False):
+    if before.id not in state.messagecache.keys():
+        try:
+            data = await loggerAPI.get_log_by_messageid(before.id)
+        except APIRequestError:
             return
-        data = data["data"]
-        logchannel = await bot.fetch_channel(int(data["tochannel"]))
-        logmessage = await logchannel.fetch_message(int(data["tomessage"]))
-        shared.messagecache[before.id] = {"msg": logmessage, "time": datetime.now()}
+        logchannel = await bot.fetch_channel(int(data.tochannel))
+        logmessage = await logchannel.fetch_message(int(data.tomessage))
+        # state.messagecache[before.id] = {"msg": logmessage, "time": datetime.now()}
+        state.messagecache[before.id] = state.CacheItem(
+            msg=logmessage,
+            time=datetime.now(UTC),
+            dto=reqdto.MessageLogReqDTO(
+                fromchannel=data.fromchannel,
+                tochannel=data.tochannel,
+                tomessage=data.tomessage,
+                frommessage=data.frommessage,
+            ),
+        )
     else:
-        logmessage = shared.messagecache[before.id]["msg"]
+        logmessage = state.messagecache[before.id].msg
     embed = logmessage.embeds[0]
     field = embed.fields[0]
     field.value = field.value + f"\n\n**Edit**\n{after.content}"

@@ -1,9 +1,10 @@
 from interactions import Client, Member
 
+from API.features.warthunder.news.response import NewsDTO
 from Extensions.WarThunder.utils import to_local, process_nick
 from common.localization import default_locale, localizator
 from Extensions.Server.model import ServerBase
-from common import safe_send, safe_dm
+from common.discordbot import safe_send, safe_dm
 from .utils import create_news_embed
 
 
@@ -33,9 +34,9 @@ async def notify_vacation_end(bot: Client, params):
         await safe_send(bot, server.botmessagechannel, message)
 
 
-async def send_news(bot: Client, params):
-    serverids = params["serverids"]
-    newsdata = params["news"]
+async def send_news(bot: Client, params: dict):
+    serverids: list[int] = params["serverids"]
+    newsdata: dict[str, list[dict]] = params["news"]
     newscache = {}
     for serverid in serverids:
         server = ServerBase(bot, serverid)
@@ -44,9 +45,10 @@ async def send_news(bot: Client, params):
             continue
         server_locale = server.server.preferred_locale or default_locale
         for lang in newsdata:
-            newslist = newsdata[lang]
+            newslist:list[dict] = newsdata[lang]
             for news in newslist:
-                key_ = (lang, news["title"], server_locale)
+                dto = NewsDTO(**news)
+                key_ = (lang, dto.title, server_locale)
                 if newscache.get(key_, None):
                     embed = newscache[key_]
                 else:

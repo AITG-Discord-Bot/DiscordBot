@@ -1,6 +1,7 @@
 from interactions import BaseContext, Permissions
 
-from . import var, apirequest
+from common.core import var
+from API.features.server import serverAPI
 
 admin_cache = {}
 
@@ -17,8 +18,7 @@ async def is_admin(ctx: BaseContext) -> bool:
     if author.has_permission(Permissions.ADMINISTRATOR):
         return True
     try:
-        res = await apirequest(f"/server/{int(server.id)}/mods")
-        res = int(res)
+        res = await serverAPI.get_mod(server.id)
         for role in author.roles:
             if int(role.id) == res:
                 return True

@@ -1,12 +1,14 @@
 import asyncio
 import copy
 from random import randint
-from typing import Union
-from common.localization import localizator, default_locale
+from typing import Union, Optional
 from interactions import *
 from datetime import datetime
 import time
-from common import apirequest, APIRequestError, safe_dm
+from common.discordbot import safe_dm
+from common.localization import localizator, default_locale
+from API import APIRequestError
+from API.features.clanwar import clanwarAPI, response as resdto, request as reqdto
 
 """
 clanwar party management
@@ -82,73 +84,69 @@ class ClanwarBase:
             self.server = ctx.guild
             self.channel: GuildText = ctx.channel
             self.owner = ctx.author
-        self.message: Message = None
+        self.message: Optional[Message] = None
         self.name = None
         self.desc = None
-        self.game = None
+        self.battlerating = None
         self.time = None
-        self.threadid: int = None
+        self.threadid: Optional[int] = None
         self.thread = None
         self.participant: list = []
         self.primarywaiter: list = []
         self.waiter: list = []
-        self.voicechannelid: int = None
+        self.voicechannelid: Optional[int] = None
         self.voicechannel = None
 
-    async def create_party(self, ctx: SlashContext, desc, game, time, role: Role):
+    async def create_party(self, ctx: SlashContext, desc: str, battlerating: str, partytime: datetime, role: Role):
         self.bot = ctx.bot
         self.ctx = ctx
         self.server = ctx.guild
         self.channel = ctx.channel
         self.owner = ctx.author
         self.desc = desc
-        self.game = game
+        self.battlerating = battlerating
         # self.name = f"클랜전 모집, BR: {self.game}"
-        self.time = time
+        self.time = partytime
         await self.send_message(save=False, role=role)
-        json = {
-            "serverid": self.server.id,
-            "time": self.time,
-            "ownerid": self.owner.id,
-            "battlerating": self.game,
-            "channelid": self.channel.id,
-            "messageid": self.message.id,
-            "description": self.desc,
-        }
-        clanwarinfo = await apirequest("/clanwar/", json=json, method="POST")
-        self.partyid = clanwarinfo["idx"]
+        dto = reqdto.ClanwarReqDTO(
+            serverid=self.server.id,
+            time=self.time,
+            ownerid=self.owner.id,
+            battlerating=self.battlerating,
+            channelid=self.channel.id,
+            messageid=self.message.id,
+            description=self.desc,
+        )
+        clanwarinfo = await clanwarAPI.create_clanwar(dto)
+        self.partyid = clanwarinfo.idx
         await self.edit_message()
 
-    async def _apply_info(self, info: dict):
-        """API 응답 데이터를 객체 멤버 변수에 매핑하는 핵심 로직 (중복 제거)"""
-        people = info["people"]
-        self.partyid = info["idx"]
-        # 기본 정보 업데이트
-        self.server = await self.bot.fetch_guild(info["serverid"])
+    async def _apply_info(self, info: resdto.ClanwarDTO):
+        people = info.people
+        self.partyid = info.idx
+        self.server = await self.bot.fetch_guild(info.serverid)
         if self._ is None:
             self._ = localizator(self.server.preferred_locale)
-        self.channel = await self.bot.fetch_channel(info["channelid"])
-        self.message = await self.channel.fetch_message(info["messageid"])
-        self.desc = info["description"]
-        self.game = info["battlerating"]
-        self.time = datetime.fromisoformat(info["time"]).strftime("%Y-%m-%d %H:%M")
-        self.owner = await self.server.fetch_member(info["ownerid"])
-        # 스레드 및 음성채널 처리
-        if info.get("threadid"):
-            self.threadid = info["threadid"]
-            self.thread = await self.server.fetch_thread(info["threadid"])
-        if info.get("voicechannelid"):
-            self.voicechannelid = info["voicechannelid"]
-            self.voicechannel = await self.bot.fetch_channel(info["voicechannelid"])
-        # 인원 분류 및 정렬 (보내주신 로직 반영)
+        self.channel = await self.bot.fetch_channel(info.channelid)
+        self.message = await self.channel.fetch_message(info.messageid)
+        self.desc = info.description
+        self.battlerating = info.battlerating
+        self.time = info.time
+        self.owner = await self.server.fetch_member(info.ownerid)
+        if info.threadid:
+            self.threadid = info.threadid
+            self.thread = await self.server.fetch_thread(self.threadid)
+        if info.voicechannelid:
+            self.voicechannelid = info.voicechannelid
+            self.voicechannel = await self.bot.fetch_channel(self.voicechannelid)
         temp_participant = {}
         temp_primarywaiter = {}
         temp_waiter = {}
 
         for person in people:
-            u_type = int(person["usertype"])
-            p_idx = person["idx"]
-            u_id = person["userid"]
+            u_type = int(person.usertype)
+            p_idx = person.idx
+            u_id = person.userid
 
             if u_type == 0:
                 temp_participant[p_idx] = u_id
@@ -156,8 +154,6 @@ class ClanwarBase:
                 temp_primarywaiter[p_idx] = u_id
             elif u_type == 2:
                 temp_waiter[p_idx] = u_id
-
-        # idx 순서로 정렬하여 리스트 확정
         self.participant = [temp_participant[k] for k in sorted(temp_participant)]
         self.primarywaiter = [temp_primarywaiter[k] for k in sorted(temp_primarywaiter)]
         self.waiter = [temp_waiter[k] for k in sorted(temp_waiter)]
@@ -170,9 +166,9 @@ class ClanwarBase:
             self.server, messageid = self.channel.guild, int(message.id)
 
         if partyid:
-            info = await apirequest(f"/clanwar/{partyid}", method="GET")
+            info = await clanwarAPI.get_clanwar_by_idx(partyid)
         elif messageid:
-            info = await apirequest(f"/clanwar/message/{messageid}", method="GET")
+            info = await clanwarAPI.get_clanwar_by_messageid(messageid)
         else:
             return
         await self._apply_info(info)
@@ -309,7 +305,7 @@ class ClanwarBase:
     async def create_embed(
         self, started=False, ended=False, auto_end=False, cancelled=False
     ):
-        self.name = self._("clanwar_party_name").format(self.game)
+        self.name = self._("clanwar_party_name").format(self.battlerating)
         embed = Embed(
             title=self.name, description=self.desc, color=randint(0, 0xFFFFFF)
         )
@@ -400,32 +396,28 @@ class ClanwarBase:
 
     async def save_partyinfo(self):
         # if party already exists, update
-        json = {
-            "serverid": self.server.id,
-            "time": self.time,
-            "ownerid": self.owner.id,
-            "battlerating": self.game,
-            "channelid": self.channel.id,
-            "messageid": self.message.id,
-            "description": self.desc,
-            "threadid": self.threadid,
-            "voicechannelid": self.voicechannelid,
-        }
-        await apirequest(f"/clanwar/{self.partyid}", json=json, method="PATCH")
+        dto = reqdto.ClanwarReqDTO(
+            serverid=self.server.id,
+            time=self.time,
+            ownerid=self.owner.id,
+            battlerating=self.battlerating,
+            channelid=self.channel.id,
+            messageid=self.message.id,
+            description=self.desc,
+            threadid=self.threadid,
+            voicechannelid=self.voicechannelid,
+        )
+        await clanwarAPI.update_clanwar(self.partyid, dto)
 
     async def add_people(self, user, wait=False):
         target_type = PARTYACTIONS.WAIT_PARTY if wait else PARTYACTIONS.JOIN_PARTY
-        updated_info = await apirequest(
-            f"/clanwar/people/{self.partyid}",
-            json={"userid": user.id, "usertype": target_type},
-            method="POST",
-        )
-        print(updated_info)
+        dto = reqdto.ClanwarPeopleReqDTO(userid=user.id, usertype=target_type)
+        updated_info = await clanwarAPI.add_people(self.partyid, dto)
         await self._apply_info(updated_info)
         my_data = next(
-            (p for p in updated_info["people"] if p["userid"] == user.id), None
+            (p for p in updated_info.people if p.userid == user.id), None
         )
-        final_type = my_data["usertype"] if my_data else target_type
+        final_type = my_data.usertype if my_data else target_type
         await self.log_action(user, final_type)
         if self.thread and (user.id != self.owner.id):
             try:
@@ -435,12 +427,9 @@ class ClanwarBase:
         return final_type
 
     async def remove_people(self, user):
-        """삭제 역시 동일한 패턴으로 구현 가능"""
-        updated_info = await apirequest(
-            f"/clanwar/people/{self.partyid}/{user.id}", method="DELETE"
-        )
+        updated_info = await clanwarAPI.remove_people(self.partyid, user)
         await self._apply_info(updated_info)
-        await self.log_action(user, "LEAVE")
+        await self.log_action(user, PARTYACTIONS.EXIT_PARTY)
 
     async def get_thread_member(self):
         if self.thread is not None:
@@ -472,11 +461,11 @@ class ClanwarBase:
         await self.set_notified()
 
     async def set_notified(self, cancelled=False):
-        url = "/clanwar/{}/notified"
         if cancelled:
-            url = "/clanwar/{}/cancel_notified"
-        await apirequest(url.format(self.partyid), method="POST")
-        return
+            await clanwarAPI.mark_cancel_notified(self.partyid)
+        else:
+            await clanwarAPI.mark_notified(self.partyid)
+
 
     async def start_party(self):
         components = await self.create_components(started=True, disable_button=True)
@@ -529,7 +518,7 @@ class ClanwarBase:
         :param del_message: if True, delete message and threadchannel
         """
         try:
-            await apirequest(f"/clanwar/{self.partyid}", method="DELETE")
+            await clanwarAPI.delete_clanwar(self.partyid)
         except APIRequestError as e:
             if e.status != 404:
                 raise e

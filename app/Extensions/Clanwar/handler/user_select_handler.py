@@ -1,7 +1,7 @@
 from interactions import Client, ComponentContext
 
 from Extensions.Clanwar.model import ClanwarBase
-from common import var
+from common.core import var
 
 
 async def on_user_select(bot: Client, ctx: ComponentContext, _):

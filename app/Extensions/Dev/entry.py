@@ -1,6 +1,7 @@
 from interactions import *
 
-from common import MyFunctions, var, is_dev
+from common.core import MyFunctions, var
+from common.guards import is_dev
 from . import core
 
 

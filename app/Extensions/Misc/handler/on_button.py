@@ -1,6 +1,10 @@
+import asyncio
+
 from interactions import *
-from common import waitforcomponent
+from common.discordbot import waitforcomponent
+from common.guards import is_admin
 from ..utils import decode_embed
+from Extensions.Server.model import ServerBase
 
 anytextchannels = [
     ChannelType.GUILD_TEXT,
@@ -13,6 +17,8 @@ anytextchannels = [
 
 async def handle(ctx: ComponentContext, _):
     bot = ctx.bot
+    ctx_message = ctx.message
+
     if ctx.custom_id == "submit_embed_url":
         modal = Modal(
             ParagraphText(
@@ -42,4 +48,128 @@ async def handle(ctx: ComponentContext, _):
         msg: Message = await channel.send(embeds=embed)
         await used_ctx.send(
             _("misc_submit_embed_url_success").format(msg.jump_url), ephemeral=True
+        )
+
+    elif ctx.custom_id.startswith("ticket_create"):
+        server = ServerBase(bot, int(ctx.guild.id), _)
+        await server.get()
+        modrole = server.modrole
+        if modrole is None:
+            return
+        category = ctx.channel.category
+        if category is None:
+            await ctx.send("카테고리를 찾을 수 없습니다.", ephemeral=True)
+            return
+        author = ctx.author
+        ticket_id = str(author.id)[-4:]
+        allow_overrides = (
+            Permissions.VIEW_CHANNEL
+            | Permissions.SEND_MESSAGES
+            | Permissions.EMBED_LINKS
+            | Permissions.ATTACH_FILES
+            | Permissions.ADD_REACTIONS
+        )
+        bot_overrides = allow_overrides | Permissions.MANAGE_CHANNELS
+        permission_overwrites = []
+        try:
+            for role in ctx.guild.roles:
+                if (
+                    Permissions.VIEW_CHANNEL
+                    in ctx_message.channel.permissions_for(role)
+                    and role != modrole
+                ):
+                    permission_overwrites.append(
+                        PermissionOverwrite(
+                            id=role.id,
+                            type=OverwriteType.ROLE,
+                            deny=Permissions.VIEW_CHANNEL,
+                        )
+                    )
+            permission_overwrites.append(
+                PermissionOverwrite(
+                    id=ctx.guild.default_role.id,
+                    type=OverwriteType.ROLE,
+                    deny=Permissions.VIEW_CHANNEL,
+                )
+            )
+            permission_overwrites.append(
+                PermissionOverwrite(
+                    id=modrole.id, type=OverwriteType.ROLE, allow=allow_overrides
+                )
+            )
+            permission_overwrites.append(
+                PermissionOverwrite(
+                    id=author.id, type=OverwriteType.MEMBER, allow=allow_overrides
+                )
+            )
+            permission_overwrites.append(
+                PermissionOverwrite(
+                    id=bot.user.id, type=OverwriteType.MEMBER, allow=bot_overrides
+                )
+            )
+            ticket = await category.create_text_channel(
+                f"ticket-{ticket_id}", permission_overwrites=permission_overwrites
+            )
+            component = Button(
+                label=_("misc_ticket_close"),
+                custom_id=f"ticket_close_{author.id}",
+                style=4,
+            )
+            message = await ticket.send(
+                content=_("misc_ticket_created").format(author.mention, author.mention),
+                components=[component],
+            )
+            await message.pin()
+        except Exception:
+            await ctx.send(
+                _("misc_ticket_create_error"),
+                ephemeral=True,
+                delete_after=30,
+            )
+            return
+        await ctx.send(
+            _("misc_ticket_created_1").format(ticket.mention),
+            ephemeral=True,
+            delete_after=30,
+        )
+
+    elif ctx.custom_id.startswith("ticket_close_"):
+        admin = await is_admin(ctx)
+        ticket = ctx.channel
+        ticket_author = await bot.fetch_user(int(ctx.custom_id.split("_")[-1]))
+        if ticket_author is None:
+            await ctx.send(_("misc_ticket_cannot_close"), ephemeral=True)
+            return
+        if ticket_author.id != ctx.author.id:
+            await ctx.send(_("misc_ticket_not_allowed"), ephemeral=True)
+            return
+        component = ctx.message.components[0]
+        component.disabled = True
+        await ctx.message.edit(components=[component])
+        if admin and ctx.author.id != ticket_author.id:
+            await ticket.set_permission(ticket_author, send_messages=False)
+            component = []
+            if "forever" not in ctx.custom_id:
+                component.append(
+                    Button(
+                        label=_("misc_ticket_reopen"),
+                        custom_id=f"ticket_reopen_{ticket_author.id}",
+                        style=1,
+                    )
+                )
+            await ctx.send(
+                _("misc_ticket_closed").format(ctx.author.mention),
+                components=component,
+                ephemeral=False,
+            )
+            return
+        component = Button(label=_("common_delete_channel"), custom_id="ticket_delete", style=4)
+        await ctx.send(
+            _("misc_ticket_closed_1").format(ticket_author.mention),
+            components=[component],
+            ephemeral=False,
+        )
+        await asyncio.sleep(5)
+        await ticket.set_permission(
+            ticket_author, view_channel=False, send_messages=False
         )

@@ -1,10 +1,13 @@
 from random import randint
 from interactions.api.events import MessageCreate
 from interactions import *
-from common import apirequest, APIRequestError, safe_dm
+from common.discordbot import safe_dm
 from datetime import datetime
+from API.features.logger import request as loggerreqdto
+from API.features.support import supportAPI
+from API.core import APIRequestError
 
-from . import shared
+from .. import state
 from .func import get_forumchannel, managecache
 
 emoji = PartialEmoji.from_str(":white_check_mark:")
@@ -46,17 +49,17 @@ async def log_message(event: MessageCreate):
         (GuildForumPost, GuildPublicThread, GuildPrivateThread, GuildNewsThread),
     ):
         channel = message.channel.parent_channel
-        if channel == shared.support_forum:
+        if channel == state.support_forum:
             await handle_support(bot, message.channel, message)
             return
         category = message.channel.parent_channel.category.id
     else:
         category = message.channel.category.id
-    if guild not in shared.logchannels.keys():
+    if guild not in state.logchannels.keys():
         return
-    if category not in shared.logchannels[guild].keys():
+    if category not in state.logchannels[guild].keys():
         return
-    channel = shared.logchannels[guild][category]
+    channel = state.logchannels[guild][category]
     color = randint(0, 0xFFFFFF)
     embed = Embed(
         title=message.author.display_name, description=message.jump_url, color=color
@@ -72,36 +75,30 @@ async def log_message(event: MessageCreate):
         embed.add_field(name="Attachment", value=value)
     embed.set_footer(text=f"Userid: {message.author.id}\nTimeStamp: {datetime.now()}")
     logmessage = await channel.send(content="", embeds=embed)
-    json = {
-        "frommessage": message.id,
-        "fromchannel": message.channel.id,
-        "tomessage": logmessage.id,
-        "tochannel": channel.id,
-    }
-    shared.messagecache[message.id] = {
-        "msg": logmessage,
-        "time": datetime.now(),
-        "json": json,
-    }
+    dto = loggerreqdto.MessageLogReqDTO(
+        frommessage=int(message.id),
+        fromchannel=int(message.channel.id),
+        tomessage=int(logmessage.id),
+        tochannel=int(channel.id),
+    )
+    state.messagecache[message.id] = state.CacheItem(logmessage, datetime.now(), dto)
     await managecache()
 
 
 async def handle_support(bot: Client, channel: GuildForumPost, message: Message):
     userid = None
-    for user in shared.forumthreads.keys():
-        if shared.forumthreads[user] == channel.id:
+    for user in state.forumthreads.keys():
+        if state.forumthreads[user] == channel.id:
             userid = user
     if userid is None:
         try:
-            data = await apirequest(
-                "/support/forumchannel", params={"channelid": channel.id}
-            )
-            userid = data["userid"]
+            data = await supportAPI.get(channelid=channel.id)
+            userid = data.userid
         except APIRequestError:
             return
-        shared.forumthreads[userid] = channel.id
-        if len(shared.forumthreads) > 100:
-            shared.forumthreads.pop(list(shared.forumthreads.keys())[0])
+        state.forumthreads[userid] = channel.id
+        if len(state.forumthreads) > 100:
+            state.forumthreads.pop(list(state.forumthreads.keys())[0])
     user = await bot.fetch_user(userid)
     if user is None:
         return

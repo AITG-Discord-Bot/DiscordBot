@@ -8,10 +8,13 @@ from interactions import (
     GuildCategory,
     BaseChannel,
 )
+
+from API import APIRequestError
 from common.localization import localizator
-from common import apirequest
-from common.var import clanbaseurl
+from common.core.var import clanbaseurl
 from urllib.parse import quote
+from API.features.server import serverAPI, response as server_res, request as server_req
+from API.features.logger import loggerAPI
 
 
 class ServerBase:
@@ -63,8 +66,8 @@ class ServerBase:
         self.localizator = _
 
     async def get(self):
-        res = await apirequest(f"/server/{self.serverid}", "GET")
-        for key, value in res.items():
+        res = await serverAPI.get_server(self.serverid)
+        for key, value in res.model_dump().items():
             if hasattr(self, key):
                 setattr(self, key, value)
         self.server = await self.bot.fetch_guild(self.serverid)
@@ -84,17 +87,15 @@ class ServerBase:
             self.localizator = localizator(self.server.preferred_locale)
 
     async def update(self, **kwargs):
-        json = {}
+        update_data = {}
         for key, value in kwargs.items():
-            if hasattr(self, key):
-                setattr(self, key, value)
-                json[key] = value
-            else:
+            if not hasattr(self, key):
                 raise AttributeError(f"Unknown attribute: {key}")
-        for i in json:
-            if isinstance(json[i], Role) or isinstance(json[i], GuildText):
-                json[i] = int(json[i].id)
-        await apirequest(f"/server/{self.serverid}", "PATCH", json=json)
+            final_value = getattr(value, "id", value)
+            setattr(self, key, final_value)
+            update_data[key] = final_value
+        dto = server_req.ServerParamsUpdate(**update_data)
+        await serverAPI.patch_server(self.serverid, dto)
 
     async def create_embed(self):
         _ = self.localizator
@@ -144,24 +145,20 @@ class ServerBase:
         return embed
 
     async def get_logchannels(self):
-        res: dict = await apirequest(
-            f"/logger/channels/{self.serverid}", "GET", surpress_error=True
-        )
-        if not res.get("success", False):
+        try:
+            res = await loggerAPI.get_server_logchannels(self.serverid)
+        except APIRequestError:
             return
-        for item in res["data"]:
-            categoryid = int(item["logcategory"])
-            channelid = int(item["logchannel"])
+        for item in res:
+            categoryid = int(item.logcategory)
+            channelid = int(item.logchannel)
             category = await self.bot.fetch_channel(categoryid)
-            channel = await self.server.fetch_channel(channelid)
+            channel = await self.bot.fetch_channel(channelid)
+            print(categoryid, channelid, category, channel)
             if category and channel:
                 self.logchannels.append({category: channel})
             else:
-                await apirequest(
-                    f"/logger/channels/{self.serverid}/{categoryid}",
-                    method="DELETE",
-                    surpress_error=True,
-                )
+                await loggerAPI.delete_logchannel(self.serverid, categoryid)
 
     async def create_logchannels_str(self):
         if not self.logchannels:

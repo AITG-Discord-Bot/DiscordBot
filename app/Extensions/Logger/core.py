@@ -1,5 +1,5 @@
 from interactions import *
-from common import apirequest
+from API.features.logger import loggerAPI, request as reqdto, response as resdto
 from . import handler
 
 
@@ -15,14 +15,14 @@ async def setlogchannel(
     if textchannel.type == ChannelType.GUILD_CATEGORY:
         await ctx.send(_("logging_notatextchannel"), ephemeral=True)
         return
-    json = {"serverid": guildid, "logchannel": textchannelid, "logcategory": categoryid}
-    await apirequest("/logger/channels", json=json, method="POST")
+    dto = reqdto.LogChannelReqDTO(serverid=guildid, logchannel=textchannelid, logcategory=categoryid)
+    await loggerAPI.create_logchannel(dto)
     handler.func.add_logchannel(guildid, categoryid, textchannel)
     await ctx.send(_("logging_logchannel_set"), ephemeral=True)
 
 
 async def dellogchannel(ctx: SlashContext, _, category: GuildCategory):
-    categordid = int(category.id)
+    categoryid = int(category.id)
     guildid = int(ctx.guild_id)
-    await apirequest(f"/logger/channels/{guildid}/{categordid}", method="DELETE")
+    await loggerAPI.delete_logchannel(guildid, categoryid)
     await ctx.send(_("logging_logchannel_deleted"), ephemeral=True)

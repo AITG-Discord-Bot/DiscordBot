@@ -6,8 +6,9 @@ from typing import Optional
 from interactions import Guild, Role, Member, Embed, SlashContext
 
 from Extensions.Server.model import ServerBase
-from common import var
+from common.core import var
 from common.localization import language_utc_offsets
+from API.features.warthunder import response
 
 
 def get_discord_clanmates(guild: Guild, role: Role) -> list[Member]:
@@ -72,14 +73,13 @@ async def check_users(
     return True
 
 
-def create_news_embed(res: dict, _) -> Embed:
-    title = res["title"]
-    link = res["link"]
-    content = res["content"]
-    time = res["time"]
-    time = datetime.fromisoformat(time)
-    time = time.strftime("YYYY-MM-DD HH:mm")
-    poster = res["poster"]
+def create_news_embed(res: response.news.NewsDTO, _) -> Embed:
+    title = res.title
+    link = res.link
+    content = res.content
+    time = res.time
+    time = time.strftime("%Y-%m-%d %H:%M")
+    poster = res.poster
     embed = Embed(title=title, description=content, color=randint(0, 0xFFFFFF))
     embed.set_image(url=poster)
     baseurl = var.warthunderbaseurl[:-1]

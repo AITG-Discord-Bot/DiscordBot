@@ -1,5 +1,5 @@
 from interactions import OptionType, slash_option, ChannelType
-from .localization import getname, getdesc
+from common.localization import getname, getdesc
 
 
 def voicechannel(

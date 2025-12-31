@@ -2,7 +2,8 @@ import logging
 
 import interactions.api.events as Events
 
-from common import MyFunctions, apirequest, RateLimiter
+from common.core import MyFunctions
+from common.guards import RateLimiter
 from common.localization import (
     getname,
     getdesc,
@@ -30,7 +31,7 @@ class Clanwar(Extension):
         self.ratelimiter = RateLimiter(max_calls=2, period=60)
 
     @clanwarbase.subcommand(
-        sub_cmd_name=getname("clanwar_command_add"),
+        sub_cmd_name=getname("common_add"),
         sub_cmd_description=getdesc("clanwar_command_add_desc"),
     )
     @localize()

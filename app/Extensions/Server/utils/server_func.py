@@ -1,5 +1,5 @@
 from interactions import *
-from common import apirequest
+from API.features.server import serverAPI
 
 
 """
@@ -13,18 +13,18 @@ on_server_join, on_server_remove 로 찢기에는 너무 배보다 배꼽이 커
 
 
 async def initialize_server(bot: Client):
-    await apirequest(
-        "/server/availability", params={"availability": False}, method="POST"
-    )
+    await serverAPI.set_availability(available=False)
     for server in bot.guilds:
-        json = {"serverid": server.id, "availability": True}
-        await apirequest("/server/availability", method="POST", params=json)
-    await apirequest("/server/availability", method="DELETE")
+        await serverAPI.set_availability(available=True, serverid=server.id)
+    await serverAPI.delete_unavailable_servers()
 
 
 async def add_server(server: Guild):
-    await apirequest("/server", method="POST", params={"serverid": server.id})
+    await serverAPI.create_server(server.id)
 
 
 async def remove_server(server: Guild):
-    await apirequest(f"/server/{server.id}", method="DELETE", surpress_error=True)
+    try:
+        await serverAPI.delete_server(server.id)
+    except:
+        pass

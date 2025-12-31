@@ -1,13 +1,13 @@
-from common import apirequest, APIRequestError
-
+from API import APIRequestError
+from API.features.server import serverAPI
+from API.features.warthunder import warthunderAPI
 
 async def get_clan_names() -> list[str]:
     """
     Get all registered clan names.
     """
     try:
-        res = await apirequest("/server/clannames")
-        return res["clannames"]
+        return await serverAPI.get_clannames()
     except APIRequestError as e:
         if e.status != 404:
             raise e
@@ -20,7 +20,5 @@ async def verify_clanname(name) -> bool:
     :param name: name to check
     :return: boolean (valid or not)
     """
-    res = await apirequest(
-        "/warthunder/clan/verify", method="GET", params={"name": name}
-    )
+    res = await warthunderAPI.clan.verify_name(name)
     return res
