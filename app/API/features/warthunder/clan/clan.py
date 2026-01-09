@@ -6,14 +6,14 @@ class WarthunderClanAPI(ApiClient):
         return await self.request(
             endpoint="/warthunder/clan/verify",
             method="GET",
-            params={"name": name},
+            params={"clanname": name},
         )
 
     async def get_members(self, clanname: str) -> list[res.ThunderClanMemberResponse]:
         return await self.request(
             endpoint="/warthunder/clan/members",
             method="GET",
-            params={"name": clanname},
+            params={"clanname": clanname},
             response_model=res.ThunderClanMemberResponse,
         )
 

@@ -64,7 +64,10 @@ async def check_activity_core(
     page_size = 30
 
     web_members = await warthunderAPI.clan.get_members(server.clanname)
-    web_members = sorted(web_members, key=lambda x: -int(x.activity))
+    if use_personalrating:
+        web_members = sorted(web_members, key=lambda x: -int(x.rating))
+    else:
+        web_members = sorted(web_members, key=lambda x: -int(x.activity))
     filtered = [m for m in web_members if int(m.activity) <= threshold]
 
     if not filtered:
@@ -77,15 +80,15 @@ async def check_activity_core(
         await ctx.send(embeds=embed, ephemeral=ephemeral)
         return
 
-    nicks = [m["nick"] for m in filtered]
+    nicks = [m.nick for m in filtered]
     if use_personalrating:
-        acts = [str(m["rating"]) for m in filtered]
+        acts = [str(m.rating) for m in filtered]
     else:
-        acts = [str(m["activity"]) for m in filtered]
+        acts = [str(m.activity) for m in filtered]
     vacations = [
         (
-            "~" + utils.to_local(m["vacation"][0]["enddate"], locale)
-            if m.get("vacation")
+            "~" + utils.to_local(m.vacation[0].enddate, locale)
+            if m.vacation
             else "X"
         )
         for m in filtered
@@ -200,7 +203,7 @@ async def add_vacation_core(ctx: SlashContext, _, options_member: Member | None)
     await modal_ctx.send(_("wt_add_vacation_success"), ephemeral=True)
 
     if server.botmessagechannel:
-        local_end = utils.to_local(enddate.isoformat(), locale)
+        local_end = utils.to_local(enddate, locale)
         await server.botmessagechannel.send(
             _("wt_add_vacation_announcement").format(nick, local_end, reason)
         )
@@ -210,7 +213,9 @@ async def view_vacation_core(ctx: SlashContext, _, ephemeral: bool):
     server = await utils.check_prerequisites(ctx, int(ctx.guild_id), _)
     if not server:
         return
-
+    if not server.clanname:
+        await ctx.send(_("wt_no_clan_set"), ephemeral=ephemeral)
+        return
     vacations = await warthunderAPI.clan.get_vacation(server.clanname)
     members = utils.get_discord_clanmates(ctx.guild, server.clanmaterole)
 
@@ -229,7 +234,7 @@ async def view_vacation_core(ctx: SlashContext, _, ephemeral: bool):
         return
 
     msg = "\n".join(
-        f"{display_names[v.member.nick]} `{v.member.nick}` - {utils.to_local(v.enddate.isoformat(), ctx.locale or 'en')} - {v.reason}"
+        f"{display_names[v.member.nick]} `{v.member.nick}` - {utils.to_local(v.enddate, ctx.locale or 'en')} - {v.reason}"
         for v in vacations
     )
     embed = Embed(
@@ -243,6 +248,8 @@ async def remove_vacation_core(ctx: SlashContext, _, options_member: Member | No
     if not server:
         return
     if not await utils.check_users(ctx, server, options_member, _):
+        return
+    if not server.clanname:
         return
 
     target = options_member if options_member else ctx.author

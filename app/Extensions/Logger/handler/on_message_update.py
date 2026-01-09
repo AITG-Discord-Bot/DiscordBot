@@ -1,6 +1,6 @@
 from datetime import datetime, UTC
 
-from interactions import ChannelType
+from interactions import ChannelType, ThreadChannel, GuildText
 from interactions.api.events import MessageUpdate
 
 from API import APIRequestError
@@ -12,6 +12,8 @@ async def handle(event: MessageUpdate):
     bot = event.bot
     before = event.before
     after = event.after
+    if not before or not after:
+        return
     if after.channel.type == ChannelType.DM:
         return
     if after.author.bot:
@@ -26,7 +28,10 @@ async def handle(event: MessageUpdate):
         except APIRequestError:
             return
         logchannel = await bot.fetch_channel(int(data.tochannel))
+        assert isinstance(logchannel, ThreadChannel | GuildText)
         logmessage = await logchannel.fetch_message(int(data.tomessage))
+        if not logmessage:
+            return
         # state.messagecache[before.id] = {"msg": logmessage, "time": datetime.now()}
         state.messagecache[before.id] = state.CacheItem(
             msg=logmessage,

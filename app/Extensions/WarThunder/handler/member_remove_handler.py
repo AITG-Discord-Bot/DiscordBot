@@ -15,6 +15,8 @@ async def on_member_remove(event: MemberRemove):
     nick = process_nick(nick)
     server = ServerBase(bot=bot, serverid=guild.id)
     await server.get()
+    if server.clanname is None:
+        return
     vacations = await warthunderAPI.clan.get_vacation(server.clanname)
     nickname = None
     for vacation in vacations:

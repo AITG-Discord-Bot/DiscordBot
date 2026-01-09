@@ -5,6 +5,7 @@ from typing import Optional
 
 from interactions import Guild, Role, Member, Embed, SlashContext
 
+from API.features.warthunder.clan.dto.response import ThunderClanMemberResponse
 from Extensions.Server.model import ServerBase
 from common.core import var
 from common.localization import language_utc_offsets
@@ -28,18 +29,16 @@ def parse_date(date_str: str) -> Optional[datetime]:
         return None
 
 
-def to_local(dt_str: str, locale: str) -> str:
-    dt = datetime.fromisoformat(dt_str)
+def to_local(dt: datetime, locale: str) -> str:
     dt = dt + timedelta(hours=language_utc_offsets.get(locale, 0))
     return dt.strftime("%Y-%m-%d")
 
 
-def create_footer(web_members: list[dict], embed: Embed, _) -> Embed:
-    updatedat = web_members[0]["updated_at"] if web_members else None
+def create_footer(web_members: list[ThunderClanMemberResponse], embed: Embed, _) -> Embed:
+    updatedat = web_members[0].updated_at if web_members else None
     if updatedat:
         now = datetime.now(UTC)
-        updatedat_dt = datetime.fromisoformat(updatedat).replace(tzinfo=UTC)
-        diff = now - updatedat_dt
+        diff = now.replace(tzinfo=None) - updatedat
         hours = diff.days * 24 + diff.seconds // 3600
         minutes = (diff.seconds % 3600) // 60
         embed.set_footer(text=_("wt_clanmate_data_updated_at").format(hours, minutes))

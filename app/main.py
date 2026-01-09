@@ -35,7 +35,7 @@ bot = Client(
     fetch_members=True,
     logger=logger,
     # send_default_errors=False,
-    activity="AITG!",
+    activity="DM for support!",
     delete_unused_application_cmds=True,
 )
 

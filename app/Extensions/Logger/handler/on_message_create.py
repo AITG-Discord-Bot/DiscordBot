@@ -1,4 +1,5 @@
 from random import randint
+from typing import Union
 from interactions.api.events import MessageCreate
 from interactions import *
 from common.discordbot import safe_dm
@@ -11,7 +12,7 @@ from .. import state
 from .func import get_forumchannel, managecache
 
 emoji = PartialEmoji.from_str(":white_check_mark:")
-
+assert emoji is not None
 
 async def handle(event: MessageCreate):
     """
@@ -43,6 +44,7 @@ async def handle(event: MessageCreate):
 async def log_message(event: MessageCreate):
     bot = event.bot
     message = event.message
+    assert isinstance(message.channel, ThreadChannel | GuildChannel), f"Expected GuildChannel or ThreadChannel, Got {type(message.channel)}"
     guild = message.channel.guild.id
     if isinstance(
         message.channel,
@@ -52,9 +54,11 @@ async def log_message(event: MessageCreate):
         if channel == state.support_forum:
             await handle_support(bot, message.channel, message)
             return
-        category = message.channel.parent_channel.category.id
+        category = message.channel.parent_channel.category
+        category = category.id if category else None
     else:
-        category = message.channel.category.id
+        category = message.channel.category
+        category = category.id if category else None
     if guild not in state.logchannels.keys():
         return
     if category not in state.logchannels[guild].keys():
@@ -85,7 +89,7 @@ async def log_message(event: MessageCreate):
     await managecache()
 
 
-async def handle_support(bot: Client, channel: GuildForumPost, message: Message):
+async def handle_support(bot: Client, channel: ThreadChannel, message: Message):
     userid = None
     for user in state.forumthreads.keys():
         if state.forumthreads[user] == channel.id:

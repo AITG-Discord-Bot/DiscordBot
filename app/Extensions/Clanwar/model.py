@@ -88,7 +88,7 @@ class ClanwarBase:
         self.name = None
         self.desc = None
         self.battlerating = None
-        self.time = None
+        self.time: Optional[datetime] = None
         self.threadid: Optional[int] = None
         self.thread = None
         self.participant: list = []
@@ -426,8 +426,8 @@ class ClanwarBase:
                 pass
         return final_type
 
-    async def remove_people(self, user):
-        updated_info = await clanwarAPI.remove_people(self.partyid, user)
+    async def remove_people(self, user: Member | User):
+        updated_info = await clanwarAPI.remove_people(self.partyid, user.id)
         await self._apply_info(updated_info)
         await self.log_action(user, PARTYACTIONS.EXIT_PARTY)
 
@@ -547,8 +547,7 @@ class PARTYACTIONS:
     CANCEL_PARTY = 22
 
 
-def maketimestr(timestr):
-    partytime = datetime.strptime(timestr, "%Y-%m-%d %H:%M")
+def maketimestr(partytime: datetime):
     partytime = int(time.mktime(partytime.timetuple()))
     partytime = f"<t:{partytime}:F>\n(<t:{partytime}:R>)"
     return partytime

@@ -14,12 +14,25 @@ from common.localization import localizator, default_locale
 
 async def on_error_handler(error: Error, logger):
     ctx = error.ctx
-    if isinstance(error, Forbidden):
-        await ctx.send("해당 명령어를 위한 권한이 부족합니다!", ephemeral=True)
+    real_error = error.error 
+    if isinstance(real_error, AssertionError):
+        msg = str(real_error)
+        logger.warning(f"Event Assertion failed: {msg}")
+        if ctx:
+            try:
+                if msg: 
+                    await ctx.send(msg)
+            except Exception:
+                pass 
+        return
+    if isinstance(real_error, Forbidden):
+        if ctx:
+            await ctx.send("해당 명령어를 위한 권한이 부족합니다!", ephemeral=True)
     else:
         logger.error(traceback.format_exc(), exc_info=True)
         if ctx is not None:
-            await ctx.send(f"에러가 발생했습니다.\n{type(error)}", ephemeral=True)
+            # 여기도 real_error 타입을 찍어주는 게 더 정확합니다
+            await ctx.send(f"에러가 발생했습니다.\n{type(real_error)}", ephemeral=True)
 
 
 async def command_error_handler(event: CommandError, logger):

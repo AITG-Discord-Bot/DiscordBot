@@ -1,6 +1,6 @@
 import logging
 
-from interactions import Client, BaseUser, GuildForumPost, BaseChannel
+from interactions import Client, Member, User, GuildForumPost, BaseChannel
 
 from API import APIRequestError
 from API.features.logger import loggerAPI
@@ -71,7 +71,7 @@ async def managecache():
         state.messagecache.pop(key, None)
 
 
-async def get_forumchannel(author: BaseUser) -> GuildForumPost:
+async def get_forumchannel(author: Member | User) -> GuildForumPost:
     forumthreadid = None
     if author.id not in state.forumthreads.keys():
         try:

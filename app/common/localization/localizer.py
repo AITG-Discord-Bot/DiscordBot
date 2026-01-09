@@ -104,7 +104,7 @@ def load_localization():
 load_localization()
 
 
-def localize(_func=None, *, server_only: bool = True):
+def localize(*, server_only: bool = True):
     def decorator(func):
         @wraps(func)
         async def wrapped_func(
@@ -127,8 +127,6 @@ def localize(_func=None, *, server_only: bool = True):
 
         return wrapped_func
 
-    if _func is not None and callable(_func):
-        return decorator(_func)
     return decorator
 
 
