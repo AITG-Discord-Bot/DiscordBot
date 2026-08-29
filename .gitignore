@@ -12,3 +12,5 @@ migrations/
 .env
 tree.txt
 used_translation_keys.json
+# 서비스별 env 파일. `.env` 패턴에 걸리지 않아 그동안 추적되고 있었다.
+*.env
