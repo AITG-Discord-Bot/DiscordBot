@@ -8,4 +8,5 @@ class ServerParamsUpdate(BaseModel):
     clanmaterole: Optional[int] = None
     clanname: Optional[str] = None
     subnews: Optional[int] = None
+    newslang: Optional[str] = None
     linkrole: Optional[int] = None

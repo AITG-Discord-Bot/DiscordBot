@@ -40,6 +40,7 @@
   "clanwar_end": "End Clan War",
   "clanwar_start": "Start Clan War",
   "clanwar_started": "The clan war has started!",
+  "clanwar_party_expired": "This clan war recruitment message no longer exists (deleted).",
   "clanwar_select_owner": "Please select the party leader!",
   "clanwar_change_owner": "Change Party Leader",
   "clanwar_owner_changed": "The party leader has been changed!",

@@ -53,5 +53,12 @@ class MyFunctions:
             result = await func(bot, params)
             return result
         except Exception as e:
-            self.logger.error(f"Error running function {name}: {e}")
-            return None
+            try:
+                params_repr = repr(params)
+                if isinstance(params_repr, str) and len(params_repr) > 1000:
+                    params_repr = params_repr[:1000] + '... (truncated)'
+            except Exception:
+                params_repr = '<unrepresentable params>'
+        # logger.exception은 스택트레이스를 자동 포함해서 기록합니다.
+        self.logger.exception("Error running function %s (bot=%r, params=%s)", name, bot, params_repr)
+        return None

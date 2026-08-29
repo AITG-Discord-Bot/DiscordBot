@@ -1,14 +1,17 @@
 import asyncio
 import copy
+import logging
 from random import randint
 from typing import Union, Optional
 from interactions import *
+from interactions.client.errors import NotFound
 from datetime import datetime
 import time
 from common.discordbot import safe_dm
 from common.localization import localizator, default_locale
 from API import APIRequestError
 from API.features.clanwar import clanwarAPI, response as resdto, request as reqdto
+from Extensions.Clanwar.exceptions import StaleClanwarError
 
 """
 clanwar party management
@@ -121,14 +124,37 @@ class ClanwarBase:
         self.partyid = clanwarinfo.idx
         await self.edit_message()
 
+    async def _abandon_stale_party(self, partyid: str) -> None:
+        logging.getLogger("AITG").warning(
+            "Abandoning stale clanwar %s (Discord channel/message missing)",
+            partyid,
+        )
+        try:
+            await clanwarAPI.abandon_stale(partyid)
+        except APIRequestError as e:
+            if getattr(e, "status", None) != 404:
+                raise
+
     async def _apply_info(self, info: resdto.ClanwarDTO):
         people = info.people
         self.partyid = info.idx
-        self.server = await self.bot.fetch_guild(info.serverid)
+        try:
+            self.server = await self.bot.fetch_guild(info.serverid)
+        except NotFound:
+            await self._abandon_stale_party(info.idx)
+            raise StaleClanwarError(info.idx)
         if self._ is None:
             self._ = localizator(self.server.preferred_locale)
-        self.channel = await self.bot.fetch_channel(info.channelid)
-        self.message = await self.channel.fetch_message(info.messageid)
+        try:
+            self.channel = await self.bot.fetch_channel(info.channelid)
+        except NotFound:
+            await self._abandon_stale_party(info.idx)
+            raise StaleClanwarError(info.idx)
+        try:
+            self.message = await self.channel.fetch_message(info.messageid)
+        except NotFound:
+            await self._abandon_stale_party(info.idx)
+            raise StaleClanwarError(info.idx)
         self.desc = info.description
         self.battlerating = info.battlerating
         self.time = info.time
@@ -179,7 +205,7 @@ class ClanwarBase:
         asyncio.create_task(self.log_action(self.owner, PARTYACTIONS.EDIT_VOICECHANNEL))
 
     async def change_owner(self, owner: Member):
-        await self.remove_people(self.owner)
+        # await self.remove_people(self.owner)
         await self.remove_people(owner)
         self.owner = owner
         await self.edit_message(save=True)

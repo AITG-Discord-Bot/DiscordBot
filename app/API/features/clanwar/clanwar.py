@@ -86,6 +86,12 @@ class ClanwarAPI(ApiClient):
             response_model=res.ClanwarDTO,
         )
 
+    async def abandon_stale(self, idx: str) -> None:
+        return await self.request(
+            endpoint=f"/clanwar/{idx}/abandon",
+            method="POST",
+        )
+
 clanwarAPI = ClanwarAPI()
 
 __all__ = ["clanwarAPI"]

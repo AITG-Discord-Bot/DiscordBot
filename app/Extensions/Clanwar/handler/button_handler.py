@@ -1,4 +1,5 @@
 from interactions import ComponentContext
+from Extensions.Clanwar.exceptions import StaleClanwarError
 from Extensions.Clanwar.model import ClanwarBase, PARTYACTIONS
 from common.guards import RateLimiter
 
@@ -17,7 +18,11 @@ async def on_button(ratelimiter: RateLimiter, ctx: ComponentContext, _):
     # 취소 버튼: "<partyid>_cancel_party"
     if custom_id.endswith("_cancel_party"):
         party_id = custom_id.split("_")[0]
-        await party.get_party(partyid=party_id)
+        try:
+            await party.get_party(partyid=party_id)
+        except StaleClanwarError:
+            await ctx.send(_("clanwar_party_expired"), ephemeral=True, delete_after=5)
+            return
 
         if author.id != party.owner.id:
             await ctx.send(_("clanwar_no_owner_area"), ephemeral=True, delete_after=5)
@@ -39,7 +44,11 @@ async def on_button(ratelimiter: RateLimiter, ctx: ComponentContext, _):
         return
 
     # 파티 정보 로드
-    await party.get_party(message=message)
+    try:
+        await party.get_party(message=message)
+    except StaleClanwarError:
+        await ctx.send(_("clanwar_party_expired"), ephemeral=True, delete_after=5)
+        return
 
     # 파티장은 여기 버튼 못 씀 (참여/대기/나가기)
     if author.id == party.owner.id:

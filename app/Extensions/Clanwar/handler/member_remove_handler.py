@@ -2,6 +2,7 @@ import interactions.api.events as Events
 from interactions import Guild, Member
 
 from API import APIRequestError
+from ..exceptions import StaleClanwarError
 from ..model import ClanwarBase
 from API.features.clanwar import clanwarAPI
 
@@ -18,6 +19,9 @@ async def on_member_remove(event: Events.MemberRemove):
         return
     for result in results:
         clanwar = ClanwarBase(bot=bot)
-        await clanwar.get_party(partyid=result.idx)
+        try:
+            await clanwar.get_party(partyid=result.idx)
+        except StaleClanwarError:
+            continue
         await clanwar.remove_people(user)
         await clanwar.edit_embed(save=False)

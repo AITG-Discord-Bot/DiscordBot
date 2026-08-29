@@ -5,6 +5,7 @@ from interactions import (
     UserSelectMenu,
     ComponentContext,
 )
+from Extensions.Clanwar.exceptions import StaleClanwarError
 from Extensions.Clanwar.model import ClanwarBase
 from common.core import var
 
@@ -15,7 +16,11 @@ async def on_string_select(ctx: ComponentContext, _):
     custom_id = ctx.custom_id
     print(custom_id)
     party = ClanwarBase(_, ctx=ctx)
-    await party.get_party(message=message)
+    try:
+        await party.get_party(message=message)
+    except StaleClanwarError:
+        await ctx.send(_("clanwar_party_expired"), ephemeral=True, delete_after=5)
+        return
     if author.id != party.owner.id and author.id not in var.devs:
         await ctx.send(_("clanwar_only_owner_area"), ephemeral=True, delete_after=5)
         return

@@ -1,8 +1,11 @@
 from datetime import datetime
+from typing import Optional
+
 from pydantic import BaseModel
 
 class NewsDTO(BaseModel):
-    idx: int | None
+    idx: Optional[int] = None
+    newslang: Optional[str] = None
     language: str
     title: str
     link: str
